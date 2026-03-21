@@ -370,6 +370,51 @@ Variables: users list[User]
         display: block;
     }
 
+    /* ── Action buttons ────────────────────────────────────────────────── */
+    .btn-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: .75rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+        background: transparent;
+        transition: all .2s;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .btn-action-edit {
+        color: #60a5fa;
+    }
+
+    .btn-action-edit:hover {
+        background: rgba(96, 165, 250, .1);
+        border-color: rgba(96, 165, 250, .2);
+    }
+
+    .btn-action-del {
+        color: #f87171;
+    }
+
+    .btn-action-del:hover {
+        background: rgba(248, 113, 113, .1);
+        border-color: rgba(248, 113, 113, .2);
+    }
+
+    /* ── Delete Warning Text ───────────────────────────────────────────── */
+    .delete-warn-text {
+        font-size: .875rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+    }
+
+    .delete-warn-text strong {
+        color: var(--text-primary);
+    }
+
     @media (max-width: 767px) {
 
         .col-date,
@@ -502,6 +547,8 @@ MAIN CONTENT CARD
                         تاريخ الانضمام
                         <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
                     </th>
+
+                    <th scope="col" class="text-center" style="width:130px;">إجراءات</th>
                 </tr>
             </thead>
 
@@ -597,6 +644,33 @@ MAIN CONTENT CARD
                         <span class="date-mono" aria-label="{{ user.created_at.strftime('%d/%m/%Y') }}">
                             {{ user.created_at.strftime('%Y-%m-%d') }}
                         </span>
+                    </td>
+
+                    {# Actions #}
+                    <td class="text-center">
+                        <div class="d-flex align-items-center justify-content-center gap-2">
+                            {# Edit Modal Pattern #}
+                            <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal"
+                                data-bs-target="#editUserModal" data-user-id="{{ user.user_id }}"
+                                data-user-fname="{{ user.fname }}" data-user-lname="{{ user.lname }}"
+                                data-user-email="{{ user.email }}" data-user-role="{{ user.role.value }}"
+                                data-user-status="{{ user.status.value }}"
+                                aria-label="تعديل {{ user.full_name }}">
+                                <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                تعديل
+                            </button>
+
+                            {# Only allow deleting if it's not the current user #}
+                            {% if current_user.user_id != user.user_id %}
+                            <button type="button" class="btn-action btn-action-del" data-bs-toggle="modal"
+                                data-bs-target="#deleteUserModal" data-user-id="{{ user.user_id }}"
+                                data-user-name="{{ user.full_name }}" data-user-role="{{ role_ar }}"
+                                aria-label="حذف {{ user.full_name }}">
+                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                حذف
+                            </button>
+                            {% endif %}
+                        </div>
                     </td>
 
                 </tr>
@@ -791,6 +865,157 @@ MODAL — ADD USER
     </div>
 </div>
 
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL — EDIT USER
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-modal="true"
+    role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="editUserModalLabel">
+                    <i class="fa-solid fa-user-pen" aria-hidden="true"></i>
+                    تعديل بيانات المستخدم
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="" id="editUserForm" novalidate>
+                <div class="modal-body p-4">
+                    <div class="d-flex flex-column gap-4">
+
+                        {# First + Last Name #}
+                        <div class="row g-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="edit_fname">
+                                    <i class="fa-solid fa-user" aria-hidden="true"></i>الاسم الأول
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <input type="text" id="edit_fname" name="fname" class="form-control-dark" required>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="edit_lname">
+                                    <i class="fa-solid fa-user" aria-hidden="true"></i>اسم العائلة
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <input type="text" id="edit_lname" name="lname" class="form-control-dark" required>
+                            </div>
+                        </div>
+
+                        {# Email #}
+                        <div>
+                            <label class="form-label-dark" for="edit_email">
+                                <i class="fa-solid fa-envelope" aria-hidden="true"></i>البريد الإلكتروني
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <input type="email" id="edit_email" name="email" class="form-control-dark"
+                                style="direction:ltr;text-align:right;" required>
+                        </div>
+
+                        {# Role & Status #}
+                        <div class="row g-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="edit_role">
+                                    <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>الدور
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <select id="edit_role" name="role" class="form-select-dark" required>
+                                    <option value="Member">طالب (Member)</option>
+                                    <option value="Supervisor">مدرب (Supervisor)</option>
+                                    <option value="Admin">مدير (Admin)</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="edit_status">
+                                    <i class="fa-solid fa-question-circle" aria-hidden="true"></i>الحالة
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <select id="edit_status" name="status" class="form-select-dark" required>
+                                    <option value="Active">نشط</option>
+                                    <option value="Inactive">غير نشط</option>
+                                    <option value="Banned">محظور</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {# Optional Password Reset #}
+                        <div>
+                            <label class="form-label-dark" for="edit_password">
+                                <i class="fa-solid fa-key" aria-hidden="true"></i>كلمة المرور الجديدة (اختياري)
+                            </label>
+                            <div class="pw-wrap">
+                                <input type="password" id="edit_password" name="password" class="form-control-dark pw-field"
+                                    placeholder="اتركه فارغاً للاحتفاظ بالحالية" autocomplete="new-password">
+                                <button type="button" class="pw-eye" id="editPwEye" aria-label="إظهار/إخفاء كلمة المرور fade">
+                                    <i class="fa-regular fa-eye" id="editPwEyeIcon" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-accent">
+                        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>حفظ التعديلات
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL — DELETE USER
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-color: rgba(239, 68, 68, .3);">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteUserModalLabel" style="color:#f87171;">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:#f87171;" aria-hidden="true"></i>
+                    تأكيد حذف المستخدم
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <form method="POST" action="" id="deleteUserForm">
+                <div class="modal-body p-4">
+                    <p class="delete-warn-text">
+                        هل أنت متأكد من رغبتك في حذف حساب <strong id="delUserName"></strong>؟<br>
+                        الدور الحالي: <span class="badge badge-custom badge-role-admin" id="delUserRole" style="font-size: .65rem;"></span>
+                    </p>
+                    <div style="background:rgba(239, 68, 68, .08);
+                                border:1px solid rgba(239, 68, 68, .2);
+                                border-radius:8px; padding:12px 14px;
+                                font-size:.78rem; color:var(--text-secondary);
+                                display:flex; align-items:flex-start; gap:9px; margin-top: 15px;">
+                        <i class="fa-solid fa-circle-info" style="color:#f87171;margin-top:1px;flex-shrink:0;"
+                            aria-hidden="true"></i>
+                        <span>
+                            هذا الإجراء نهائي ولا يمكن التراجع عنه. سيؤدي إلى حذف تمامی بيانات المستخدم بما في ذلك المشاركات والاشتراكات.
+                        </span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-danger"
+                        style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600;">
+                        <i class="fa-solid fa-trash-can me-1" aria-hidden="true"></i>
+                        نعم، احذف الحساب
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 
@@ -901,22 +1126,77 @@ MODAL — ADD USER
         /* ═══════════════════════════════════════════════════════════════════
            3. PASSWORD SHOW / HIDE TOGGLE
         ═══════════════════════════════════════════════════════════════════ */
-        const pwInput = document.getElementById('password');
-        const pwEye = document.getElementById('pwEye');
-        const pwIcon = document.getElementById('pwEyeIcon');
+        function setupPasswordToggle(inputId, eyeId, iconId) {
+            const pwInput = document.getElementById(inputId);
+            const pwEye = document.getElementById(eyeId);
+            const pwIcon = document.getElementById(iconId);
 
-        if (pwEye && pwInput) {
-            pwEye.addEventListener('click', function () {
-                const hidden = pwInput.type === 'password';
-                pwInput.type = hidden ? 'text' : 'password';
-                pwInput.classList.toggle('pw-field', true);
-                pwIcon.className = hidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
-                pwEye.setAttribute('aria-pressed', String(hidden));
+            if (pwEye && pwInput) {
+                pwEye.addEventListener('click', function () {
+                    const hidden = pwInput.type === 'password';
+                    pwInput.type = hidden ? 'text' : 'password';
+                    pwInput.classList.toggle('pw-field', true);
+                    pwIcon.className = hidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
+                    pwEye.setAttribute('aria-pressed', String(hidden));
+                });
+            }
+        }
+        setupPasswordToggle('password', 'pwEye', 'pwEyeIcon');
+        setupPasswordToggle('edit_password', 'editPwEye', 'editPwEyeIcon');
+
+        /* ═══════════════════════════════════════════════════════════════════
+           4. MODAL DATA POPULATION (EDIT / DELETE)
+        ═══════════════════════════════════════════════════════════════════ */
+        const editModalEl = document.getElementById('editUserModal');
+        if (editModalEl) {
+            editModalEl.addEventListener('show.bs.modal', function (event) {
+                const btn = event.relatedTarget;
+                const uid = btn.getAttribute('data-user-id');
+                const fname = btn.getAttribute('data-user-fname');
+                const lname = btn.getAttribute('data-user-lname');
+                const email = btn.getAttribute('data-user-email');
+                const role = btn.getAttribute('data-user-role');
+                const status = btn.getAttribute('data-user-status');
+
+                // Update form action dynamically
+                const form = document.getElementById('editUserForm');
+                form.action = `/users/edit/${uid}`;
+
+                // Fill inputs
+                document.getElementById('edit_fname').value = fname;
+                document.getElementById('edit_lname').value = lname;
+                document.getElementById('edit_email').value = email;
+                
+                // Select specific options
+                const roleSelect = document.getElementById('edit_role');
+                Array.from(roleSelect.options).forEach(opt => opt.selected = (opt.value === role));
+
+                const statusSelect = document.getElementById('edit_status');
+                Array.from(statusSelect.options).forEach(opt => opt.selected = (opt.value === status));
+                
+                // Clear password field
+                document.getElementById('edit_password').value = '';
+            });
+        }
+
+        const delModalEl = document.getElementById('deleteUserModal');
+        if (delModalEl) {
+            delModalEl.addEventListener('show.bs.modal', function (event) {
+                const btn = event.relatedTarget;
+                const uid = btn.getAttribute('data-user-id');
+                const name = btn.getAttribute('data-user-name');
+                const role = btn.getAttribute('data-user-role');
+
+                const form = document.getElementById('deleteUserForm');
+                form.action = `/users/delete/${uid}`;
+
+                document.getElementById('delUserName').textContent = name;
+                document.getElementById('delUserRole').textContent = role;
             });
         }
 
         /* ═══════════════════════════════════════════════════════════════════
-           4. KEYBOARD SHORTCUT  Ctrl/Cmd+F → focus search
+           5. KEYBOARD SHORTCUT  Ctrl/Cmd+F → focus search
         ═══════════════════════════════════════════════════════════════════ */
         document.addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f' &&

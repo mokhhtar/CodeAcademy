@@ -96,3 +96,103 @@ def _register_user_routes(app) -> None:
             flash("حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مجدداً.", "danger")
 
         return redirect(url_for("users"))
+
+
+    # =========================================================================
+    #  POST /users/edit/<int:user_id> — Edit an existing user
+    # =========================================================================
+
+    @app.route("/users/edit/<int:user_id>", methods=["POST"])
+    @login_required
+    @admin_required
+    def edit_user(user_id):
+        """Handle the Edit User form submission."""
+        user = User.query.get_or_404(user_id)
+
+        fname    = request.form.get("fname", "").strip()
+        lname    = request.form.get("lname", "").strip()
+        email    = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        role_val = request.form.get("role", "")
+        status_val = request.form.get("status", "")
+
+        # ── Validation ───────────────────────────────────────────────────
+        if not fname or not lname or not email or not role_val or not status_val:
+            flash("يرجى تعبئة جميع الحقول المطلوبة لتعديل المستخدم.", "danger")
+            return redirect(url_for("users"))
+
+        try:
+            role = RoleEnum(role_val)
+        except ValueError:
+            flash("الدور المحدد غير صالح.", "danger")
+            return redirect(url_for("users"))
+
+        try:
+            status = UserStatusEnum(status_val)
+        except ValueError:
+            flash("الحالة المحددة غير صالحة.", "danger")
+            return redirect(url_for("users"))
+
+        # Check for email conflict
+        if email != user.email:
+            existing = User.query.filter(User.email.ilike(email)).first()
+            if existing:
+                flash(f"البريد الإلكتروني '{email}' مستخدم مسبقاً لحساب آخر.", "warning")
+                return redirect(url_for("users"))
+
+        # ── Update fields ──────────────────────────────────────────────────
+        user.fname = fname
+        user.lname = lname
+        user.email = email
+        user.role = role
+        user.status = status
+
+        if password:
+            if len(password) < 8:
+                flash("يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.", "warning")
+                return redirect(url_for("users"))
+            user.set_password(password)
+
+        try:
+            db.session.commit()
+            flash(f"تم تحديث بيانات المستخدم ({fname} {lname}) بنجاح. ✅", "success")
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error(f"edit_user error: {exc}")
+            flash("حدث خطأ أثناء تحديث بيانات الحساب. يرجى المحاولة مجدداً.", "danger")
+
+        return redirect(url_for("users"))
+
+
+    # =========================================================================
+    #  POST /users/delete/<int:user_id> — Delete a user
+    # =========================================================================
+
+    @app.route("/users/delete/<int:user_id>", methods=["POST"])
+    @login_required
+    @admin_required
+    def delete_user(user_id):
+        """Delete an existing user."""
+        from flask_login import current_user
+        
+        user = User.query.get_or_404(user_id)
+
+        # Prevent self-deletion
+        if user.user_id == current_user.user_id:
+            flash("لا يمكنك حذف حسابك الشخصي.", "danger")
+            return redirect(url_for("users"))
+
+        try:
+            # Note: depending on relationships in models.py (e.g. cascade deletes)
+            # deleting a user might effect associated groups or subscriptions. 
+            # Assuming SQLAlchemy handles the cascade if configured, or user wants force delete
+            name = user.full_name
+            db.session.delete(user)
+            db.session.commit()
+            flash(f"تم حذف المستخدم ({name}) نهائياً.", "success")
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error(f"delete_user error: {exc}")
+            flash("تعذر حذف المستخدم. قد يكون مرتبطاً ببيانات أخرى في النظام (مثل الاشتراكات أو المجموعات).", "danger")
+
+        return redirect(url_for("users"))
