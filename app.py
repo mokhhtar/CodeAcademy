@@ -54,6 +54,7 @@ from receipt_routes import _register_receipt_routes
 from list_routes import _register_list_routes
 from certificate_routes import _register_certificate_routes
 from groups_routes import _register_group_routes
+from plans_routes import _register_plan_routes
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ def create_app(config_name: str = "development") -> Flask:
     _register_list_routes(app)
     _register_certificate_routes(app)
     _register_group_routes(app)
+    _register_plan_routes(app)
     _register_core_routes(app)
 
     with app.app_context():

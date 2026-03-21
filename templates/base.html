@@ -1083,7 +1083,7 @@
                 <span class="nav-label">الاشتراكات</span>
             </a>
 
-            <a href="#"
+            <a href="{{ url_for('plans') }}"
                 class="nav-item-link {% if request.endpoint and request.endpoint.startswith('plans') %}active{% endif %}"
                 role="listitem">
                 <i class="fa-solid fa-tags nav-icon" aria-hidden="true"></i>
@@ -1292,6 +1292,9 @@
         </div>
         {% endblock %}
     </main>
+
+    {# ── Modals block — rendered outside main-wrapper to avoid stacking context ── #}
+    {% block modals %}{% endblock %}
 
 
     <!-- ═══════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,581 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+plans.html — إدارة خطط الاشتراك
+Extends : base.html
+Route : GET /plans
+Variables: plans list[SubscriptionPlan]
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}خطط الاشتراك — أكاديمية شيفرة{% endblock %}
+{% block page_title %}خطط الاشتراك{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Modal overrides (dark theme) ─────────────────────────────────── */
+    .modal-content {
+        background: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: 16px;
+        color: var(--text-primary);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid var(--surface-border);
+        padding: 18px 22px;
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--surface-border);
+        padding: 14px 22px;
+    }
+
+    .modal-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .modal-title i {
+        color: #2dd4bf;
+    }
+
+    .btn-close-modal {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 4px;
+        line-height: 1;
+        transition: color .2s;
+    }
+
+    .btn-close-modal:hover {
+        color: var(--text-primary);
+    }
+
+    /* ── Form controls ────────────────────────────────────────────────── */
+    .form-label-dark {
+        font-size: .78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+
+    .form-label-dark i {
+        color: #2dd4bf;
+        font-size: .72rem;
+    }
+
+    .required-star {
+        color: #f87171;
+        margin-right: 2px;
+    }
+
+    .form-control-dark {
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 9px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 14px;
+        width: 100%;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .form-control-dark::placeholder {
+        color: var(--text-muted);
+    }
+
+    .form-control-dark:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    /* Number inputs: keep numerals LTR inside RTL layout */
+    .form-control-dark[type="number"] {
+        direction: ltr;
+        text-align: right;
+    }
+
+    /* ── Plan card cells ──────────────────────────────────────────────── */
+    .plan-name-cell {
+        font-size: .9rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .duration-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: .78rem;
+        font-weight: 600;
+        background: rgba(129, 140, 248, .1);
+        color: #a5b4fc;
+        border: 1px solid rgba(129, 140, 248, .2);
+    }
+
+    .price-val {
+        font-family: var(--font-mono);
+        font-size: .92rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .price-cur {
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Toggle action button ─────────────────────────────────────────── */
+    .btn-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: 7px;
+        font-size: .78rem;
+        font-weight: 600;
+        border: 1px solid;
+        cursor: pointer;
+        background: transparent;
+        transition: background .18s, color .18s;
+        white-space: nowrap;
+    }
+
+    .btn-toggle-hide {
+        border-color: rgba(245, 158, 11, .35);
+        color: #fbbf24;
+    }
+
+    .btn-toggle-hide:hover {
+        background: rgba(245, 158, 11, .1);
+    }
+
+    .btn-toggle-activate {
+        border-color: rgba(16, 185, 129, .35);
+        color: #34d399;
+    }
+
+    .btn-toggle-activate:hover {
+        background: rgba(16, 185, 129, .1);
+    }
+
+    /* ── Summary banner ───────────────────────────────────────────────── */
+    .summary-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .summary-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .82rem;
+    }
+
+    .summary-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .summary-val {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .summary-lbl {
+        color: var(--text-muted);
+    }
+
+    /* ── Empty state ──────────────────────────────────────────────────── */
+    .empty-rows td {
+        padding: 52px 20px !important;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        opacity: .35;
+        display: block;
+    }
+
+    /* ── Plan ID chip ─────────────────────────────────────────────────── */
+    .plan-id {
+        font-family: var(--font-mono);
+        font-size: .75rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        color: var(--text-muted);
+    }
+
+    /* ── Usage counter ────────────────────────────────────────────────── */
+    .usage-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px;
+        border-radius: 20px;
+        font-size: .7rem;
+        font-weight: 600;
+        background: rgba(45, 212, 191, .07);
+        border: 1px solid rgba(45, 212, 191, .15);
+        color: #2dd4bf;
+    }
+
+    @media (max-width: 767px) {
+
+        .col-id,
+        .col-usage {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-tags me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+            إدارة خطط الاشتراك
+        </h1>
+        <p class="page-subtitle">تحديد أسعار ومدد خطط الاشتراك المتاحة للطلاب</p>
+    </div>
+
+    <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        data-bs-toggle="modal" data-bs-target="#addPlanModal" aria-label="إضافة خطة اشتراك جديدة">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        إضافة خطة جديدة
+    </button>
+</div>
+
+{# ── Summary banner ──────────────────────────────────────────────────────── #}
+{% set active_plans = plans | selectattr('is_active') | list %}
+{% set inactive_plans = plans | rejectattr('is_active') | list %}
+
+<div class="summary-banner" role="region" aria-label="ملخص الخطط">
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+        <span class="summary-val">{{ plans | length }}</span>
+        <span class="summary-lbl">إجمالي الخطط</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#34d399;" aria-hidden="true"></span>
+        <span class="summary-val">{{ active_plans | length }}</span>
+        <span class="summary-lbl">متاحة للبيع</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+        <span class="summary-val">{{ inactive_plans | length }}</span>
+        <span class="summary-lbl">مخفية</span>
+    </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MAIN CONTENT CARD
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="content-card" role="region" aria-label="جدول خطط الاشتراك">
+
+    <div class="content-card-header">
+        <h2 class="content-card-title">
+            <i class="fa-solid fa-table-list" aria-hidden="true"></i>
+            قائمة الخطط
+        </h2>
+        <span style="font-size:.75rem;color:var(--text-muted);">
+            {{ plans | length }} خطة مسجَّلة
+        </span>
+    </div>
+
+    {# ── Table ─────────────────────────────────────────────────────────────── #}
+    <div class="table-responsive">
+        <table class="table table-dark-custom mb-0" aria-label="جدول خطط الاشتراك">
+            <thead>
+                <tr>
+                    <th scope="col" class="col-id" style="width:60px;">#</th>
+                    <th scope="col">اسم الخطة</th>
+                    <th scope="col">المدة</th>
+                    <th scope="col">السعر</th>
+                    <th scope="col" class="col-usage text-center">الاستخدام</th>
+                    <th scope="col" class="text-center" style="width:100px;">الحالة</th>
+                    <th scope="col" class="text-center" style="width:110px;">إجراء</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for plan in plans %}
+                <tr aria-label="خطة {{ plan.plan_name }}">
+
+                    {# ID #}
+                    <td class="col-id">
+                        <span class="plan-id">{{ plan.plan_id }}</span>
+                    </td>
+
+                    {# Plan name #}
+                    <td>
+                        <div class="plan-name-cell">{{ plan.plan_name }}</div>
+                    </td>
+
+                    {# Duration #}
+                    <td>
+                        <span class="duration-chip" aria-label="{{ plan.duration_months }} شهر">
+                            <i class="fa-regular fa-clock" style="font-size:.7rem;" aria-hidden="true"></i>
+                            {{ plan.duration_months }}
+                            {% if plan.duration_months == 1 %}شهر{% else %}أشهر{% endif %}
+                        </span>
+                    </td>
+
+                    {# Price #}
+                    <td>
+                        <span class="price-val" aria-label="{{ '{:,.2f}'.format(plan.price | float) }} دينار">
+                            {{ "{:,.2f}".format(plan.price | float) }}
+                        </span>
+                        <span class="price-cur"> دج</span>
+                    </td>
+
+                    {# Usage count (active subscriptions on this plan) #}
+                    <td class="col-usage text-center">
+                        {% set usage = plan.subscriptions.filter_by(status='Active').count()
+                        if plan.subscriptions is defined else 0 %}
+                        <span class="usage-chip" aria-label="{{ usage }} اشتراك نشط">
+                            <i class="fa-solid fa-users" style="font-size:.6rem;" aria-hidden="true"></i>
+                            {{ plan.subscriptions.count() }}
+                        </span>
+                    </td>
+
+                    {# Status badge #}
+                    <td class="text-center">
+                        {% if plan.is_active %}
+                        <span class="badge badge-custom badge-active" aria-label="الحالة: متاح">
+                            <i class="fa-solid fa-circle" style="font-size:.5rem;vertical-align:middle;margin-left:4px;"
+                                aria-hidden="true"></i>
+                            متاح
+                        </span>
+                        {% else %}
+                        <span class="badge badge-custom badge-expired" aria-label="الحالة: مخفي">
+                            <i class="fa-solid fa-circle" style="font-size:.5rem;vertical-align:middle;margin-left:4px;"
+                                aria-hidden="true"></i>
+                            مخفي
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    {# Toggle action #}
+                    <td class="text-center">
+                        <form method="POST" action="{{ url_for('toggle_plan', plan_id=plan.plan_id) }}"
+                            style="display:inline;">
+                            {% if plan.is_active %}
+                            <button type="submit" class="btn-toggle btn-toggle-hide"
+                                aria-label="إخفاء خطة {{ plan.plan_name }}"
+                                onclick="return confirm('إخفاء خطة \'{{ plan.plan_name }}\' من قائمة الاشتراك الجديد؟')">
+                                <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                                إخفاء
+                            </button>
+                            {% else %}
+                            <button type="submit" class="btn-toggle btn-toggle-activate"
+                                aria-label="تفعيل خطة {{ plan.plan_name }}">
+                                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                                تفعيل
+                            </button>
+                            {% endif %}
+                        </form>
+                    </td>
+
+                </tr>
+                {% else %}
+                <tr class="empty-rows">
+                    <td colspan="7">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-tags"></i>
+                        </span>
+                        لا توجد خطط اشتراك بعد.
+                        <br />
+                        <button type="button" data-bs-toggle="modal" data-bs-target="#addPlanModal" style="color:#2dd4bf;background:none;border:none;
+                           cursor:pointer;font-size:.85rem;margin-top:8px;">
+                            أضف أول خطة الآن
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Footer note ──────────────────────────────────────────────────────── #}
+    <div class="pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
+        <p style="font-size:.75rem;color:var(--text-muted);margin:0;">
+            <i class="fa-solid fa-circle-info me-1" aria-hidden="true"></i>
+            إخفاء الخطة يمنع إنشاء اشتراكات جديدة بها فقط — الاشتراكات الحالية
+            لا تتأثر.
+        </p>
+    </div>
+
+</div>{# /.content-card #}
+
+{% endblock %}{# /block content #}
+
+
+{% block modals %}
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL — ADD PLAN
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="addPlanModal" tabindex="-1" aria-labelledby="addPlanModalLabel" aria-modal="true"
+    role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="addPlanModalLabel">
+                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                    إضافة خطة اشتراك جديدة
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="{{ url_for('add_plan') }}" id="addPlanForm" novalidate>
+                <div class="modal-body p-4">
+                    <div class="d-flex flex-column gap-4">
+
+                        {# Plan Name #}
+                        <div>
+                            <label class="form-label-dark" for="plan_name">
+                                <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                                اسم الخطة
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <input type="text" id="plan_name" name="plan_name" class="form-control-dark"
+                                placeholder="مثال: شهري، سنوي، ربع سنوي…" required aria-required="true" />
+                        </div>
+
+                        {# Duration + Price — side by side on larger screens #}
+                        <div class="row g-3">
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="duration_months">
+                                    <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                                    المدة (بالأشهر)
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <input type="number" id="duration_months" name="duration_months"
+                                    class="form-control-dark" placeholder="1" min="1" step="1" required
+                                    aria-required="true" aria-describedby="durationHelp" />
+                                <div id="durationHelp" style="font-size:.7rem;color:var(--text-muted);margin-top:5px;">
+                                    أدخل عدد الأشهر — مثال: 1 للشهري، 12 للسنوي
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="price">
+                                    <i class="fa-solid fa-coins" aria-hidden="true"></i>
+                                    السعر (دج)
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <input type="number" id="price" name="price" class="form-control-dark"
+                                    placeholder="0.00" min="0.01" step="0.01" required aria-required="true"
+                                    aria-describedby="priceHelp" />
+                                <div id="priceHelp" style="font-size:.7rem;color:var(--text-muted);margin-top:5px;">
+                                    السعر بالدينار الجزائري — يقبل كسوراً
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {# Info note #}
+                        <div style="background:rgba(45,212,191,.06);
+                        border:1px solid rgba(45,212,191,.15);
+                        border-radius:8px; padding:12px 14px;
+                        font-size:.78rem; color:var(--text-secondary);
+                        display:flex; align-items:flex-start; gap:9px;">
+                            <i class="fa-solid fa-circle-info" style="color:#2dd4bf;margin-top:1px;flex-shrink:0;"
+                                aria-hidden="true"></i>
+                            <span>
+                                ستكون الخطة <strong style="color:#34d399;">متاحة للبيع</strong>
+                                فور إنشائها. يمكنك إخفاؤها لاحقاً من جدول الخطط.
+                            </span>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">
+                        إلغاء
+                    </button>
+                    <button type="submit" class="btn btn-accent">
+                        <i class="fa-solid fa-check me-1" aria-hidden="true"></i>
+                        إنشاء الخطة
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}{# /block modals #}
+
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* Re-open Add modal with preserved input if validation failed
+           (Flash message appears but modal closes by default — this keeps
+           the user in context if the server redirects back to /plans).    */
+        {% with messages = get_flashed_messages(with_categories = true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        {% if category == 'danger' %}
+        /* Reopen add modal on validation error so user doesn't lose context */
+        window.addEventListener('DOMContentLoaded', function () {
+            // Only reopen if the error looks plan-related (not a global error)
+            var msg = {{ message | tojson
+        }};
+    if (msg && (msg.includes('خطة') || msg.includes('السعر') || msg.includes('المدة'))) {
+        var modal = new bootstrap.Modal(document.getElementById('addPlanModal'));
+        modal.show();
+    }
+  });
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+}) ();
+</script>
+{% endblock %}

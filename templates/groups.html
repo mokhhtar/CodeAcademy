@@ -54,6 +54,15 @@ edit_group Group | undefined (present when editing)
         background: #0f1f38;
     }
 
+    /* ── Fix modal z-index above sidebar (sidebar = 1040) ──────────────── */
+    .modal-backdrop {
+        z-index: 1050 !important;
+    }
+
+    .modal {
+        z-index: 1055 !important;
+    }
+
     /* ── Bootstrap modal dark overrides ───────────────────────────────── */
     .modal-content {
         background: var(--surface-card);
@@ -638,7 +647,10 @@ MAIN CONTENT CARD
 
 </div>{# /.content-card #}
 
+{% endblock %}{# /block content #}
 
+
+{% block modals %}
 {# ════════════════════════════════════════════════════════════════════════════
 MODAL 1 — ADD GROUP
 ════════════════════════════════════════════════════════════════════════════ #}
@@ -853,8 +865,6 @@ MODAL 3 — DELETE CONFIRM
     </div>
 </div>
 
-{% endblock %}
-
 
 {# Hidden data div for edit_group initialisation (read by JS below) #}
 {% if edit_group is defined and edit_group %}
@@ -864,6 +874,9 @@ MODAL 3 — DELETE CONFIRM
     data-action="{{ url_for('edit_group', group_id=edit_group.group_id) }}">
 </div>
 {% endif %}
+
+{% endblock %}{# /block modals #}
+
 
 {% block scripts %}
 <script>
@@ -1044,5 +1057,20 @@ MODAL 3 — DELETE CONFIRM
         }
 
     })();
+
+    /* ═══════════════════════════════════════════════════════════════════
+       GLOBAL: remove any stuck modal-backdrop when a modal closes
+    ═══════════════════════════════════════════════════════════════════ */
+    document.addEventListener('hidden.bs.modal', function () {
+        // Remove ALL leftover backdrops
+        document.querySelectorAll('.modal-backdrop').forEach(function (el) {
+            el.remove();
+        });
+        // Remove classes Bootstrap adds to <body>
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    });
+
 </script>
 {% endblock %}
