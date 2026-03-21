@@ -1060,7 +1060,7 @@
             {# Section: إدارة الأشخاص #}
             <div class="nav-section-label" aria-hidden="true">إدارة الأشخاص</div>
 
-            <a href="#"
+            <a href="{{ url_for('users') }}"
                 class="nav-item-link {% if request.endpoint and request.endpoint.startswith('users') %}active{% endif %}"
                 role="listitem">
                 <i class="fa-solid fa-users nav-icon" aria-hidden="true"></i>

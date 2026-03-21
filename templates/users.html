@@ -1,0 +1,934 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+users.html — إدارة المستخدمين
+Extends : base.html
+Route : GET /users
+Variables: users list[User]
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}إدارة المستخدمين — أكاديمية شيفرة{% endblock %}
+{% block page_title %}المستخدمون{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Role badge variants ───────────────────────────────────────────── */
+    .badge-role-admin {
+        background: rgba(239, 68, 68, .13);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, .28);
+    }
+
+    .badge-role-supervisor {
+        background: rgba(245, 158, 11, .13);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, .28);
+    }
+
+    .badge-role-member {
+        background: rgba(14, 165, 233, .13);
+        color: #38bdf8;
+        border: 1px solid rgba(14, 165, 233, .28);
+    }
+
+    /* ── Status badge variants (reuse base.html classes + local) ─────── */
+    .badge-status-active {
+        background: rgba(16, 185, 129, .13);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, .28);
+    }
+
+    .badge-status-inactive {
+        background: rgba(100, 116, 139, .13);
+        color: #94a3b8;
+        border: 1px solid rgba(100, 116, 139, .28);
+    }
+
+    /* ── Search bar ────────────────────────────────────────────────────── */
+    .search-wrap {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: .85rem;
+        pointer-events: none;
+        transition: color .2s;
+    }
+
+    .search-input {
+        width: 100%;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 40px 10px 16px;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-input:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    /* ── User chip in table ────────────────────────────────────────────── */
+    .user-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .user-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .75rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .avatar-admin {
+        background: linear-gradient(135deg, #7f1d1d, #ef4444);
+    }
+
+    .avatar-supervisor {
+        background: linear-gradient(135deg, #78350f, #f59e0b);
+    }
+
+    .avatar-member {
+        background: linear-gradient(135deg, #0c4a6e, #0ea5e9);
+    }
+
+    .user-full-name {
+        font-size: .875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .user-id-sub {
+        font-size: .7rem;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+    }
+
+    /* ── Email display ─────────────────────────────────────────────────── */
+    .email-cell {
+        font-size: .82rem;
+        color: var(--text-secondary);
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ── Join date ─────────────────────────────────────────────────────── */
+    .date-mono {
+        font-family: var(--font-mono);
+        font-size: .8rem;
+        color: var(--text-secondary);
+    }
+
+    /* ── Modal dark overrides ──────────────────────────────────────────── */
+    .modal-content {
+        background: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: 16px;
+        color: var(--text-primary);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid var(--surface-border);
+        padding: 18px 22px;
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--surface-border);
+        padding: 14px 22px;
+    }
+
+    .modal-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .modal-title i {
+        color: #2dd4bf;
+    }
+
+    .btn-close-modal {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 4px;
+        line-height: 1;
+        transition: color .2s;
+    }
+
+    .btn-close-modal:hover {
+        color: var(--text-primary);
+    }
+
+    /* ── Form controls ─────────────────────────────────────────────────── */
+    .form-label-dark {
+        font-size: .78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+
+    .form-label-dark i {
+        color: #2dd4bf;
+        font-size: .72rem;
+    }
+
+    .required-star {
+        color: #f87171;
+        margin-right: 2px;
+    }
+
+    .form-control-dark,
+    .form-select-dark {
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 9px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 14px;
+        width: 100%;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .form-select-dark {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: left 12px center;
+        background-size: 14px;
+        padding-left: 36px;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+
+    .form-control-dark::placeholder {
+        color: var(--text-muted);
+    }
+
+    .form-control-dark:focus,
+    .form-select-dark:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    .form-select-dark option {
+        background: var(--surface-card);
+    }
+
+    /* password eye toggle */
+    .pw-wrap {
+        position: relative;
+    }
+
+    .pw-eye {
+        position: absolute;
+        top: 50%;
+        left: 12px;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        padding: 4px;
+        color: var(--text-muted);
+        cursor: pointer;
+        z-index: 2;
+        transition: color .2s;
+        line-height: 1;
+    }
+
+    .pw-eye:hover {
+        color: #2dd4bf;
+    }
+
+    .form-control-dark[type="password"],
+    .form-control-dark[type="text"].pw-field {
+        padding-left: 38px;
+    }
+
+    /* ── Summary banner ────────────────────────────────────────────────── */
+    .summary-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .summary-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .82rem;
+    }
+
+    .summary-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .summary-val {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .summary-lbl {
+        color: var(--text-muted);
+    }
+
+    /* ── Sort indicator ────────────────────────────────────────────────── */
+    th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th[data-sort]:hover {
+        color: var(--text-primary) !important;
+    }
+
+    th[data-sort] .sort-icon {
+        font-size: .65rem;
+        margin-right: 4px;
+        color: var(--text-muted);
+    }
+
+    th[data-sort].asc .sort-icon,
+    th[data-sort].desc .sort-icon {
+        color: #2dd4bf;
+    }
+
+    tr.row-hidden {
+        display: none;
+    }
+
+    tr.row-match {
+        animation: rowPulse .35s ease;
+    }
+
+    @keyframes rowPulse {
+        0% {
+            background: rgba(45, 212, 191, .07);
+        }
+
+        100% {
+            background: transparent;
+        }
+    }
+
+    /* ── Empty state ───────────────────────────────────────────────────── */
+    .empty-rows td {
+        padding: 52px 20px !important;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        opacity: .35;
+        display: block;
+    }
+
+    @media (max-width: 767px) {
+
+        .col-date,
+        .col-status {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 575px) {
+        .col-email {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-users me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+            إدارة المستخدمين
+        </h1>
+        <p class="page-subtitle">عرض وإدارة جميع حسابات المنصة (مدراء، مدربون، طلاب)</p>
+    </div>
+
+    <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        data-bs-toggle="modal" data-bs-target="#addUserModal" aria-label="إضافة مستخدم جديد">
+        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+        إضافة مستخدم جديد
+    </button>
+</div>
+
+{# ── Summary banner ──────────────────────────────────────────────────────── #}
+{% set admins = users | selectattr('role.value','equalto','Admin') | list %}
+{% set supervisors = users | selectattr('role.value','equalto','Supervisor') | list %}
+{% set members = users | selectattr('role.value','equalto','Member') | list %}
+{% set actives = users | selectattr('is_active') | list %}
+
+<div class="summary-banner" role="region" aria-label="ملخص المستخدمين">
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+        <span class="summary-val">{{ users | length }}</span>
+        <span class="summary-lbl">إجمالي المستخدمين</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#f87171;" aria-hidden="true"></span>
+        <span class="summary-val">{{ admins | length }}</span>
+        <span class="summary-lbl">مدير</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#fbbf24;" aria-hidden="true"></span>
+        <span class="summary-val">{{ supervisors | length }}</span>
+        <span class="summary-lbl">مدرب</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#38bdf8;" aria-hidden="true"></span>
+        <span class="summary-val">{{ members | length }}</span>
+        <span class="summary-lbl">طالب</span>
+    </div>
+    <div class="summary-item" style="margin-right:auto;">
+        <span class="summary-dot" style="background:#34d399;" aria-hidden="true"></span>
+        <span class="summary-val">{{ actives | length }}</span>
+        <span class="summary-lbl">حساب نشط</span>
+    </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MAIN CONTENT CARD
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="content-card" role="region" aria-label="جدول المستخدمين">
+
+    {# ── Card header: title + search ─────────────────────────────────────── #}
+    <div class="content-card-header flex-column flex-md-row
+              align-items-start align-items-md-center gap-3">
+
+        <h2 class="content-card-title mb-0">
+            <i class="fa-solid fa-table-list" aria-hidden="true"></i>
+            قائمة المستخدمين
+        </h2>
+
+        <div class="d-flex flex-column flex-sm-row align-items-stretch
+                align-items-sm-center gap-2 ms-auto w-100" style="max-width:440px;">
+
+            <div class="search-wrap flex-grow-1">
+                <input type="search" id="tableSearch" class="search-input" placeholder="ابحث بالاسم أو البريد أو الدور…"
+                    autocomplete="off" aria-label="بحث في المستخدمين" aria-controls="usersTable" />
+                <span class="search-icon" aria-hidden="true">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+            </div>
+
+            <button id="clearSearch" class="btn btn-outline-subtle btn-sm" style="display:none;white-space:nowrap;"
+                type="button" aria-label="مسح البحث">
+                <i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>
+                مسح
+            </button>
+        </div>
+    </div>
+
+    {# ── Table ────────────────────────────────────────────────────────────── #}
+    <div class="table-responsive">
+        <table id="usersTable" class="table table-dark-custom mb-0" aria-label="جدول المستخدمين" aria-live="polite">
+            <thead>
+                <tr>
+                    <th scope="col" style="width:36px;" aria-hidden="true">#</th>
+
+                    <th scope="col" data-sort="name">
+                        الاسم
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-email" data-sort="email">
+                        البريد الإلكتروني
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="role">
+                        الدور
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-status text-center">الحالة</th>
+
+                    <th scope="col" class="col-date" data-sort="date">
+                        تاريخ الانضمام
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+                </tr>
+            </thead>
+
+            <tbody id="tableBody">
+                {% for user in users %}
+
+                {# ── Role mapping ─────────────────────────────────────────── #}
+                {% if user.role.value == 'Admin' %}
+                {% set role_ar = 'مدير' %}
+                {% set role_badge = 'badge-role-admin' %}
+                {% set role_icon = 'fa-shield-halved' %}
+                {% set avatar_cls = 'avatar-admin' %}
+                {% elif user.role.value == 'Supervisor' %}
+                {% set role_ar = 'مدرب' %}
+                {% set role_badge = 'badge-role-supervisor' %}
+                {% set role_icon = 'fa-chalkboard-user' %}
+                {% set avatar_cls = 'avatar-supervisor' %}
+                {% else %}
+                {% set role_ar = 'طالب' %}
+                {% set role_badge = 'badge-role-member' %}
+                {% set role_icon = 'fa-graduation-cap' %}
+                {% set avatar_cls = 'avatar-member' %}
+                {% endif %}
+
+                <tr class="user-row" data-name="{{ user.fname }} {{ user.lname }}" data-email="{{ user.email }}"
+                    data-role="{{ role_ar }}" data-status="{{ user.status.value }}"
+                    data-date="{{ user.created_at.strftime('%Y-%m-%d') }}"
+                    aria-label="{{ user.full_name }} — {{ role_ar }}">
+
+                    <td style="color:var(--text-muted);font-size:.78rem;">
+                        {{ loop.index }}
+                    </td>
+
+                    {# Name + ID sub-label #}
+                    <td>
+                        <div class="user-chip">
+                            <div class="user-avatar {{ avatar_cls }}" aria-hidden="true" title="{{ user.full_name }}">
+                                {{ user.fname[0] | upper }}
+                            </div>
+                            <div>
+                                <div class="user-full-name">
+                                    {{ user.fname }} {{ user.lname }}
+                                    {# Current user marker #}
+                                    {% if user.user_id == current_user.user_id %}
+                                    <span style="font-size:.65rem;color:#2dd4bf;
+                               font-weight:500;margin-right:5px;" title="هذا حسابك">
+                                        (أنت)
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div class="user-id-sub" aria-label="معرف المستخدم {{ user.user_id }}">
+                                    UID-{{ "%05d" % user.user_id }}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+
+                    {# Email #}
+                    <td class="col-email">
+                        <span class="email-cell" title="{{ user.email }}">
+                            {{ user.email }}
+                        </span>
+                    </td>
+
+                    {# Role badge #}
+                    <td>
+                        <span class="badge badge-custom {{ role_badge }}" aria-label="الدور: {{ role_ar }}">
+                            <i class="fa-solid {{ role_icon }}"
+                                style="font-size:.55rem;vertical-align:middle;margin-left:4px;" aria-hidden="true"></i>
+                            {{ role_ar }}
+                        </span>
+                    </td>
+
+                    {# Status badge #}
+                    <td class="col-status text-center">
+                        {% if user.is_active %}
+                        <span class="badge badge-custom badge-status-active" aria-label="الحالة: نشط">
+                            <i class="fa-solid fa-circle" style="font-size:.5rem;vertical-align:middle;margin-left:4px;"
+                                aria-hidden="true"></i>
+                            نشط
+                        </span>
+                        {% else %}
+                        <span class="badge badge-custom badge-status-inactive" aria-label="الحالة: غير نشط">
+                            <i class="fa-solid fa-circle" style="font-size:.5rem;vertical-align:middle;margin-left:4px;"
+                                aria-hidden="true"></i>
+                            غير نشط
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    {# Join date #}
+                    <td class="col-date">
+                        <span class="date-mono" aria-label="{{ user.created_at.strftime('%d/%m/%Y') }}">
+                            {{ user.created_at.strftime('%Y-%m-%d') }}
+                        </span>
+                    </td>
+
+                </tr>
+                {% else %}
+                <tr class="empty-rows">
+                    <td colspan="6">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-users"></i>
+                        </span>
+                        لا يوجد مستخدمون بعد.
+                        <br />
+                        <button type="button" data-bs-toggle="modal" data-bs-target="#addUserModal" style="color:#2dd4bf;background:none;border:none;
+                           cursor:pointer;font-size:.85rem;margin-top:8px;">
+                            أضف أول مستخدم الآن
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <tr id="noResults" style="display:none;" class="empty-rows">
+                    <td colspan="6">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        لا توجد نتائج مطابقة للبحث.
+                        <br />
+                        <button onclick="document.getElementById('tableSearch').value='';filterTable();" style="color:#2dd4bf;background:none;border:none;
+                           cursor:pointer;font-size:.85rem;margin-top:8px;">
+                            مسح البحث وعرض الكل
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Footer ───────────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center justify-content-between
+              flex-wrap gap-2 pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
+        <span style="font-size:.78rem;color:var(--text-muted);">
+            يُعرض
+            <strong id="visibleCount" style="color:var(--text-secondary);">{{ users | length }}</strong>
+            من
+            <strong style="color:var(--text-secondary);">{{ users | length }}</strong>
+            مستخدم
+        </span>
+    </div>
+
+</div>{# /.content-card #}
+
+{% endblock %}{# /block content #}
+
+
+{% block modals %}
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL — ADD USER
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-modal="true"
+    role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUserModalLabel">
+                    <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+                    إضافة مستخدم جديد
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="{{ url_for('add_user') }}" id="addUserForm" novalidate>
+                <div class="modal-body p-4">
+                    <div class="d-flex flex-column gap-4">
+
+                        {# First + Last Name — side by side #}
+                        <div class="row g-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="fname">
+                                    <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                    الاسم الأول
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <input type="text" id="fname" name="fname" class="form-control-dark"
+                                    placeholder="مثال: أحمد" required aria-required="true" />
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label-dark" for="lname">
+                                    <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                    اسم العائلة
+                                    <span class="required-star" aria-hidden="true">*</span>
+                                </label>
+                                <input type="text" id="lname" name="lname" class="form-control-dark"
+                                    placeholder="مثال: بوعلام" required aria-required="true" />
+                            </div>
+                        </div>
+
+                        {# Email #}
+                        <div>
+                            <label class="form-label-dark" for="email">
+                                <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                                البريد الإلكتروني
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <input type="email" id="email" name="email" class="form-control-dark"
+                                placeholder="example@shyfra.dz" autocomplete="email" required aria-required="true"
+                                style="direction:ltr;text-align:right;" />
+                        </div>
+
+                        {# Password with show/hide toggle #}
+                        <div>
+                            <label class="form-label-dark" for="password">
+                                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                                كلمة المرور
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <div class="pw-wrap">
+                                <input type="password" id="password" name="password" class="form-control-dark pw-field"
+                                    placeholder="••••••••" autocomplete="new-password" required aria-required="true"
+                                    aria-describedby="passwordHelp" />
+                                <button type="button" class="pw-eye" id="pwEye" aria-label="إظهار/إخفاء كلمة المرور"
+                                    aria-pressed="false">
+                                    <i class="fa-regular fa-eye" id="pwEyeIcon" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div id="passwordHelp" style="font-size:.7rem;color:var(--text-muted);margin-top:5px;">
+                                8 أحرف على الأقل — يُنصح باستخدام أحرف وأرقام ورموز
+                            </div>
+                        </div>
+
+                        {# Role select #}
+                        <div>
+                            <label class="form-label-dark" for="role">
+                                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                                الدور
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <select id="role" name="role" class="form-select-dark" required aria-required="true">
+                                <option value="" disabled selected>— اختر الدور —</option>
+                                <option value="Member">طالب (Member)</option>
+                                <option value="Supervisor">مدرب (Supervisor)</option>
+                                <option value="Admin">مدير (Admin)</option>
+                            </select>
+                        </div>
+
+                        {# Role legend — helps admin understand each role #}
+                        <div style="background:rgba(45,212,191,.05);
+                        border:1px solid rgba(45,212,191,.12);
+                        border-radius:8px; padding:12px 14px;">
+                            <div style="font-size:.7rem;font-weight:700;color:var(--text-muted);
+                          letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">
+                                صلاحيات الأدوار
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:5px;">
+                                <div style="font-size:.75rem;color:var(--text-secondary);
+                            display:flex;align-items:center;gap:7px;">
+                                    <span class="badge badge-custom badge-role-member"
+                                        style="font-size:.65rem;">طالب</span>
+                                    يرى اشتراكاته وشهاداته فقط
+                                </div>
+                                <div style="font-size:.75rem;color:var(--text-secondary);
+                            display:flex;align-items:center;gap:7px;">
+                                    <span class="badge badge-custom badge-role-supervisor"
+                                        style="font-size:.65rem;">مدرب</span>
+                                    يُدير مجموعته ويُصدر الشهادات
+                                </div>
+                                <div style="font-size:.75rem;color:var(--text-secondary);
+                            display:flex;align-items:center;gap:7px;">
+                                    <span class="badge badge-custom badge-role-admin"
+                                        style="font-size:.65rem;">مدير</span>
+                                    صلاحية كاملة على النظام
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">
+                        إلغاء
+                    </button>
+                    <button type="submit" class="btn btn-accent">
+                        <i class="fa-solid fa-user-plus me-1" aria-hidden="true"></i>
+                        إنشاء الحساب
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* ═══════════════════════════════════════════════════════════════════
+           1. REAL-TIME TABLE SEARCH
+        ═══════════════════════════════════════════════════════════════════ */
+        const searchInput = document.getElementById('tableSearch');
+        const clearBtn = document.getElementById('clearSearch');
+        const tableBody = document.getElementById('tableBody');
+        const noResults = document.getElementById('noResults');
+        const visibleCount = document.getElementById('visibleCount');
+        const allRows = Array.from(tableBody.querySelectorAll('tr.user-row'));
+
+        let sortCol = null, sortDir = 'asc';
+
+        function filterTable() {
+            const raw = searchInput.value.trim().toLowerCase();
+            const terms = raw.split(/\s+/).filter(Boolean);
+            let visible = 0;
+
+            allRows.forEach(function (row) {
+                const haystack = [
+                    row.dataset.name || '',
+                    row.dataset.email || '',
+                    row.dataset.role || '',
+                    row.dataset.status || '',
+                    row.dataset.date || '',
+                ].join(' ').toLowerCase();
+
+                const match = terms.every(function (t) { return haystack.includes(t); });
+
+                if (match) {
+                    row.classList.remove('row-hidden');
+                    row.classList.add('row-match');
+                    setTimeout(function () { row.classList.remove('row-match'); }, 400);
+                    visible++;
+                } else {
+                    row.classList.add('row-hidden');
+                    row.classList.remove('row-match');
+                }
+            });
+
+            if (visibleCount) visibleCount.textContent = visible;
+            noResults.style.display = (visible === 0 && allRows.length > 0) ? '' : 'none';
+            clearBtn.style.display = raw.length > 0 ? '' : 'none';
+        }
+
+        function debounce(fn, ms) {
+            let t; return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', debounce(filterTable, 160));
+            searchInput.addEventListener('search', filterTable);
+        }
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                searchInput.value = ''; filterTable(); searchInput.focus();
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           2. COLUMN SORT
+        ═══════════════════════════════════════════════════════════════════ */
+        const sortMap = {
+            name: function (r) { return r.dataset.name || ''; },
+            email: function (r) { return r.dataset.email || ''; },
+            role: function (r) { return r.dataset.role || ''; },
+            date: function (r) { return r.dataset.date || ''; },
+        };
+
+        document.querySelectorAll('th[data-sort]').forEach(function (th) {
+            th.addEventListener('click', function () {
+                const key = th.dataset.sort;
+                sortDir = (sortCol === key && sortDir === 'asc') ? 'desc' : 'asc';
+                sortCol = key;
+
+                document.querySelectorAll('th[data-sort]').forEach(function (h) {
+                    h.classList.remove('asc', 'desc');
+                    h.removeAttribute('aria-sort');
+                    const ic = h.querySelector('.sort-icon');
+                    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+                });
+                th.classList.add(sortDir);
+                th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+                const ai = th.querySelector('.sort-icon');
+                if (ai) ai.className = sortDir === 'asc'
+                    ? 'fa-solid fa-sort-up sort-icon'
+                    : 'fa-solid fa-sort-down sort-icon';
+
+                const getter = sortMap[key];
+                if (!getter) return;
+                [...allRows].sort(function (a, b) {
+                    const va = getter(a), vb = getter(b);
+                    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                }).forEach(function (r) { tableBody.appendChild(r); });
+                filterTable();
+            });
+        });
+
+        /* ═══════════════════════════════════════════════════════════════════
+           3. PASSWORD SHOW / HIDE TOGGLE
+        ═══════════════════════════════════════════════════════════════════ */
+        const pwInput = document.getElementById('password');
+        const pwEye = document.getElementById('pwEye');
+        const pwIcon = document.getElementById('pwEyeIcon');
+
+        if (pwEye && pwInput) {
+            pwEye.addEventListener('click', function () {
+                const hidden = pwInput.type === 'password';
+                pwInput.type = hidden ? 'text' : 'password';
+                pwInput.classList.toggle('pw-field', true);
+                pwIcon.className = hidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
+                pwEye.setAttribute('aria-pressed', String(hidden));
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           4. KEYBOARD SHORTCUT  Ctrl/Cmd+F → focus search
+        ═══════════════════════════════════════════════════════════════════ */
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f' &&
+                searchInput && document.activeElement !== searchInput) {
+                e.preventDefault(); searchInput.focus(); searchInput.select();
+            }
+            if (e.key === 'Escape' && searchInput &&
+                document.activeElement === searchInput) {
+                searchInput.value = ''; filterTable();
+            }
+        });
+
+    })();
+</script>
+{% endblock %}
