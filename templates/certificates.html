@@ -1,0 +1,630 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+certificates.html — سجل الشهادات
+Extends : base.html
+Route : GET /certificates (certificates)
+Variables: certificates list of (Certificate, MemberUser, Group, IssuerUser|None)
+search_query, viewer_role
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}سجل الشهادات — أكاديمية شيفرة{% endblock %}
+{% block page_title %}الشهادات{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Search bar ────────────────────────────────────────────────────── */
+    .search-wrap {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: .85rem;
+        pointer-events: none;
+        transition: color .2s;
+    }
+
+    .search-input {
+        width: 100%;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 40px 10px 16px;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-input:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    /* ── Member chip ───────────────────────────────────────────────────── */
+    .member-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .member-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #1e3a5f, #2dd4bf);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .72rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .member-name {
+        font-size: .875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .member-email {
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Certificate code chip ─────────────────────────────────────────── */
+    .cert-code {
+        font-family: var(--font-mono);
+        font-size: .72rem;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 6px;
+        background: rgba(45, 212, 191, .08);
+        border: 1px solid rgba(45, 212, 191, .2);
+        color: #2dd4bf;
+        letter-spacing: .04em;
+        word-break: break-all;
+    }
+
+    /* ── Group / course pill ───────────────────────────────────────────── */
+    .group-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: .78rem;
+        font-weight: 600;
+        background: rgba(129, 140, 248, .1);
+        color: #a5b4fc;
+        border: 1px solid rgba(129, 140, 248, .2);
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ── Issuer mini-chip ──────────────────────────────────────────────── */
+    .issuer-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .78rem;
+        color: var(--text-secondary);
+    }
+
+    .issuer-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #1e3a5f, #818cf8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .6rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    /* ── Summary banner ────────────────────────────────────────────────── */
+    .summary-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .summary-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .82rem;
+    }
+
+    .summary-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .summary-val {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .summary-lbl {
+        color: var(--text-muted);
+    }
+
+    /* ── Sort / filter ─────────────────────────────────────────────────── */
+    th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th[data-sort]:hover {
+        color: var(--text-primary) !important;
+    }
+
+    th[data-sort] .sort-icon {
+        font-size: .65rem;
+        margin-right: 4px;
+        color: var(--text-muted);
+    }
+
+    th[data-sort].asc .sort-icon,
+    th[data-sort].desc .sort-icon {
+        color: #2dd4bf;
+    }
+
+    tr.row-hidden {
+        display: none;
+    }
+
+    tr.row-match {
+        animation: rowPulse .35s ease;
+    }
+
+    @keyframes rowPulse {
+        0% {
+            background: rgba(45, 212, 191, .07);
+        }
+
+        100% {
+            background: transparent;
+        }
+    }
+
+    /* ── Empty state ───────────────────────────────────────────────────── */
+    .empty-rows td {
+        padding: 52px 20px !important;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        opacity: .35;
+        display: block;
+    }
+
+    /* ── Print button ──────────────────────────────────────────────────── */
+    .btn-print-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: 7px;
+        font-size: .78rem;
+        font-weight: 600;
+        background: transparent;
+        border: 1px solid var(--surface-border);
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: border-color .18s, color .18s, background .18s;
+        white-space: nowrap;
+    }
+
+    .btn-print-row:hover {
+        border-color: #2dd4bf;
+        color: #2dd4bf;
+        background: rgba(45, 212, 191, .05);
+    }
+
+    /* ── Gold tint for certificate icon ───────────────────────────────── */
+    .cert-icon-gold {
+        color: #f59e0b;
+    }
+
+    @media(max-width:767px) {
+
+        .col-issuer,
+        .col-date {
+            display: none !important;
+        }
+    }
+
+    @media(max-width:575px) {
+        .col-code {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-certificate me-2 cert-icon-gold" aria-hidden="true"></i>
+            سجل الشهادات
+        </h1>
+        <p class="page-subtitle">شهادات إتمام المسارات البرمجية الصادرة للطلاب</p>
+    </div>
+
+    {# Supervisors and Admins can issue a new certificate #}
+    {% if viewer_role in ('Admin', 'Supervisor') %}
+    <a href="#" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        aria-label="إصدار شهادة جديدة">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        إصدار شهادة
+    </a>
+    {% endif %}
+</div>
+
+{# ── Summary banner ──────────────────────────────────────────────────────── #}
+<div class="summary-banner" role="region" aria-label="ملخص الشهادات">
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#f59e0b;" aria-hidden="true"></span>
+        <span class="summary-val">{{ certificates | length }}</span>
+        <span class="summary-lbl">إجمالي الشهادات</span>
+    </div>
+    {% if viewer_role == 'Admin' %}
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#2dd4bf;" aria-hidden="true"></span>
+        <span class="summary-val">
+            {{ certificates | map(attribute='2') | map(attribute='group_name')
+            | unique | list | length }}
+        </span>
+        <span class="summary-lbl">مسار / مجموعة</span>
+    </div>
+    {% endif %}
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MAIN CONTENT CARD
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="content-card" role="region" aria-label="جدول الشهادات">
+
+    {# ── Card header ──────────────────────────────────────────────────────── #}
+    <div class="content-card-header flex-column flex-md-row
+              align-items-start align-items-md-center gap-3">
+
+        <h2 class="content-card-title mb-0">
+            <i class="fa-solid fa-scroll" aria-hidden="true"></i>
+            قائمة الشهادات
+        </h2>
+
+        <div class="d-flex flex-column flex-sm-row align-items-stretch
+                align-items-sm-center gap-2 ms-auto w-100" style="max-width:520px;">
+
+            <div class="search-wrap flex-grow-1">
+                <input type="search" id="tableSearch" class="search-input"
+                    placeholder="ابحث عن طالب أو مسار أو كود شهادة…" value="{{ search_query }}" autocomplete="off"
+                    aria-label="بحث في الشهادات" aria-controls="certificatesTable" />
+                <span class="search-icon" aria-hidden="true">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+            </div>
+
+            <button id="clearSearch" class="btn btn-outline-subtle btn-sm" style="display:none;white-space:nowrap;"
+                type="button" aria-label="مسح البحث">
+                <i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>
+                مسح
+            </button>
+        </div>
+    </div>
+
+    {# ── Table ────────────────────────────────────────────────────────────── #}
+    <div class="table-responsive">
+        <table id="certificatesTable" class="table table-dark-custom mb-0" aria-label="جدول شهادات إتمام المسارات"
+            aria-live="polite">
+            <thead>
+                <tr>
+                    <th scope="col" style="width:36px;" aria-hidden="true">#</th>
+
+                    <th scope="col" class="col-code" data-sort="code">
+                        كود الشهادة
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="name">
+                        الطالب
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="group">
+                        المسار / المجموعة
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-issuer">المشرف المُصدِر</th>
+
+                    <th scope="col" class="col-date" data-sort="date">
+                        تاريخ الإصدار
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="text-center" style="width:96px;">إجراء</th>
+                </tr>
+            </thead>
+
+            <tbody id="tableBody">
+                {# Tuple: (Certificate, MemberUser, Group, IssuerUser|None) #}
+                {% for cert, member, group, issuer in certificates %}
+                <tr class="cert-row" data-code="{{ cert.certificate_code }}"
+                    data-name="{{ member.fname }} {{ member.lname }}" data-email="{{ member.email }}"
+                    data-group="{{ group.group_name }}" data-issuer="{{ issuer.full_name if issuer else '' }}"
+                    data-date="{{ cert.issue_date }}"
+                    aria-label="شهادة {{ member.fname }} {{ member.lname }} — {{ group.group_name }}">
+
+                    <td style="color:var(--text-muted);font-size:.78rem;">{{ loop.index }}</td>
+
+                    {# Certificate code #}
+                    <td class="col-code">
+                        <span class="cert-code" title="{{ cert.certificate_code }}"
+                            aria-label="كود الشهادة {{ cert.certificate_code }}">
+                            {{ cert.certificate_code }}
+                        </span>
+                    </td>
+
+                    {# Member chip #}
+                    <td>
+                        <div class="member-chip">
+                            <div class="member-avatar" aria-hidden="true" title="{{ member.full_name }}">
+                                {{ member.fname[0] | upper }}
+                            </div>
+                            <div>
+                                <div class="member-name">{{ member.fname }} {{ member.lname }}</div>
+                                <div class="member-email">{{ member.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+
+                    {# Group / course #}
+                    <td>
+                        <span class="group-pill" title="{{ group.group_name }}">
+                            <i class="fa-solid fa-layer-group" style="font-size:.7rem;flex-shrink:0;"
+                                aria-hidden="true"></i>
+                            {{ group.group_name }}
+                        </span>
+                    </td>
+
+                    {# Issuer #}
+                    <td class="col-issuer">
+                        {% if issuer %}
+                        <div class="issuer-chip" title="{{ issuer.full_name }}">
+                            <div class="issuer-avatar" aria-hidden="true">
+                                {{ issuer.fname[0] | upper }}
+                            </div>
+                            <span>{{ issuer.fname }} {{ issuer.lname }}</span>
+                        </div>
+                        {% else %}
+                        <span style="font-size:.78rem;color:var(--text-muted);">—</span>
+                        {% endif %}
+                    </td>
+
+                    {# Issue date #}
+                    <td class="col-date">
+                        <span style="font-family:var(--font-mono);font-size:.8rem;
+                         color:var(--text-secondary);" aria-label="{{ cert.issue_date.strftime('%d/%m/%Y') }}">
+                            {{ cert.issue_date.strftime('%Y-%m-%d') }}
+                        </span>
+                    </td>
+
+                    {# Print action #}
+                    <td class="text-center">
+                        <a href="{{ url_for('print_certificate', cert_id=cert.certificate_id) }}" target="_blank"
+                            rel="noopener" class="btn-print-row"
+                            aria-label="طباعة شهادة {{ member.fname }} {{ member.lname }}">
+                            <i class="fa-solid fa-print" aria-hidden="true"></i>
+                            طباعة
+                        </a>
+                    </td>
+
+                </tr>
+                {% else %}
+                <tr class="empty-rows">
+                    <td colspan="7">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-certificate"></i>
+                        </span>
+                        لا توجد شهادات مطابقة للبحث الحالي.
+                        <br />
+                        <a href="{{ url_for('certificates') }}" style="color:#2dd4bf;font-size:.85rem;
+                      margin-top:8px;display:inline-block;">
+                            عرض جميع الشهادات
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <tr id="noResults" style="display:none;" class="empty-rows">
+                    <td colspan="7">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        لا توجد نتائج مطابقة للبحث.
+                        <br />
+                        <button onclick="document.getElementById('tableSearch').value='';filterTable();" style="color:#2dd4bf;background:none;border:none;
+                           cursor:pointer;font-size:.85rem;margin-top:8px;">
+                            مسح البحث وعرض الكل
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Table footer ─────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center justify-content-between
+              flex-wrap gap-2 pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
+        <span style="font-size:.78rem;color:var(--text-muted);">
+            يُعرض
+            <strong id="visibleCount" style="color:var(--text-secondary);">{{ certificates | length }}</strong>
+            من
+            <strong style="color:var(--text-secondary);">{{ certificates | length }}</strong>
+            شهادة
+        </span>
+
+        {% if search_query %}
+        <a href="{{ url_for('certificates') }}" class="btn btn-outline-subtle btn-sm" style="font-size:.75rem;">
+            <i class="fa-solid fa-filter-circle-xmark me-1" aria-hidden="true"></i>
+            إزالة البحث
+        </a>
+        {% endif %}
+    </div>
+
+</div>{# /.content-card #}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        const searchInput = document.getElementById('tableSearch');
+        const clearBtn = document.getElementById('clearSearch');
+        const tableBody = document.getElementById('tableBody');
+        const noResults = document.getElementById('noResults');
+        const visibleCount = document.getElementById('visibleCount');
+        const allRows = Array.from(tableBody.querySelectorAll('tr.cert-row'));
+
+        let sortCol = null, sortDir = 'asc';
+
+        /* ── 1. Real-time filter ─────────────────────────────────────────── */
+        function filterTable() {
+            const raw = searchInput.value.trim().toLowerCase();
+            const terms = raw.split(/\s+/).filter(Boolean);
+            let visible = 0;
+
+            allRows.forEach(function (row) {
+                const haystack = [
+                    row.dataset.code || '',
+                    row.dataset.name || '',
+                    row.dataset.email || '',
+                    row.dataset.group || '',
+                    row.dataset.issuer || '',
+                    row.dataset.date || '',
+                ].join(' ').toLowerCase();
+
+                const match = terms.every(function (t) { return haystack.includes(t); });
+
+                if (match) {
+                    row.classList.remove('row-hidden');
+                    row.classList.add('row-match');
+                    setTimeout(function () { row.classList.remove('row-match'); }, 400);
+                    visible++;
+                } else {
+                    row.classList.add('row-hidden');
+                    row.classList.remove('row-match');
+                }
+            });
+
+            if (visibleCount) visibleCount.textContent = visible;
+            noResults.style.display = (visible === 0 && allRows.length > 0) ? '' : 'none';
+            clearBtn.style.display = raw.length > 0 ? '' : 'none';
+        }
+
+        function debounce(fn, ms) {
+            let t;
+            return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+        }
+
+        searchInput.addEventListener('input', debounce(filterTable, 160));
+        searchInput.addEventListener('search', filterTable);
+        clearBtn.addEventListener('click', function () {
+            searchInput.value = ''; filterTable(); searchInput.focus();
+        });
+        if (searchInput.value) filterTable();
+
+        /* ── 2. Column sort ──────────────────────────────────────────────── */
+        const sortMap = {
+            code: function (r) { return r.dataset.code || ''; },
+            name: function (r) { return r.dataset.name || ''; },
+            group: function (r) { return r.dataset.group || ''; },
+            date: function (r) { return r.dataset.date || ''; },
+        };
+
+        document.querySelectorAll('th[data-sort]').forEach(function (th) {
+            th.addEventListener('click', function () {
+                const key = th.dataset.sort;
+                sortDir = (sortCol === key && sortDir === 'asc') ? 'desc' : 'asc';
+                sortCol = key;
+
+                document.querySelectorAll('th[data-sort]').forEach(function (h) {
+                    h.classList.remove('asc', 'desc');
+                    h.removeAttribute('aria-sort');
+                    const ic = h.querySelector('.sort-icon');
+                    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+                });
+                th.classList.add(sortDir);
+                th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+                const ai = th.querySelector('.sort-icon');
+                if (ai) ai.className = sortDir === 'asc'
+                    ? 'fa-solid fa-sort-up sort-icon'
+                    : 'fa-solid fa-sort-down sort-icon';
+
+                const getter = sortMap[key];
+                if (!getter) return;
+                [...allRows].sort(function (a, b) {
+                    const va = getter(a), vb = getter(b);
+                    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                }).forEach(function (r) { tableBody.appendChild(r); });
+
+                filterTable();
+            });
+        });
+
+        /* ── 3. Keyboard shortcuts ───────────────────────────────────────── */
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f' &&
+                document.activeElement !== searchInput) {
+                e.preventDefault(); searchInput.focus(); searchInput.select();
+            }
+            if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = ''; filterTable();
+            }
+        });
+    })();
+</script>
+{% endblock %}

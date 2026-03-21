@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>تسجيل الدخول — أكاديمية شيفرة</title>
+
+    {# ─── Fonts ────────────────────────────────────────────────────────── #}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
+        rel="stylesheet" />
+
+    {# ─── Bootstrap 5 RTL ─────────────────────────────────────────────── #}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css"
+        integrity="sha384-dpuaG1suU0eT09tx937/mutcmt4jK2+gI+VnPsNoBOkPXDJJgXMhAMqkRLkz6Xjv" crossorigin="anonymous" />
+
+    {# ─── FontAwesome ──────────────────────────────────────────────────── #}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════
+       DESIGN SYSTEM
+    ═══════════════════════════════════════════════════════════════════ */
+        :root {
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #0f172a;
+            --border: #2d4263;
+            --border-focus: #2dd4bf;
+            --accent: #2dd4bf;
+            --accent-dark: #0f9488;
+            --accent-glow: rgba(45, 212, 191, 0.25);
+            --text-pri: #e2e8f0;
+            --text-sec: #94a3b8;
+            --text-muted: #64748b;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --font: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            font-family: var(--font);
+            background-color: var(--bg);
+            color: var(--text-pri);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ── Ambient grid background ──────────────────────────────────────── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(45, 212, 191, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(45, 212, 191, 0.035) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Radial glow orbs ─────────────────────────────────────────────── */
+        .bg-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .bg-orb-1 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(45, 212, 191, 0.08) 0%, transparent 70%);
+            top: -100px;
+            right: -100px;
+            animation: orbFloat 8s ease-in-out infinite;
+        }
+
+        .bg-orb-2 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.07) 0%, transparent 70%);
+            bottom: -80px;
+            left: -80px;
+            animation: orbFloat 10s ease-in-out infinite reverse;
+        }
+
+        @keyframes orbFloat {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            50% {
+                transform: translate(20px, -20px);
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+       FLASH MESSAGES
+    ═══════════════════════════════════════════════════════════════════ */
+        .flash-stack {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(480px, calc(100vw - 32px));
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .flash-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            animation: flashSlide 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+
+        @keyframes flashSlide {
+            from {
+                opacity: 0;
+                transform: translateY(-16px) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .flash-item.alert-danger {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .flash-item.alert-success {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        .flash-item.alert-warning {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: #fde68a;
+        }
+
+        .flash-item.alert-info {
+            background: rgba(45, 212, 191, 0.12);
+            border-color: rgba(45, 212, 191, 0.3);
+            color: #2dd4bf;
+        }
+
+        .flash-item .flash-icon {
+            font-size: 1rem;
+            margin-top: 1px;
+            flex-shrink: 0;
+        }
+
+        .flash-item .flash-text {
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .flash-item .flash-close {
+            background: none;
+            border: none;
+            padding: 0;
+            color: inherit;
+            opacity: 0.5;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: opacity 0.15s;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .flash-item .flash-close:hover {
+            opacity: 1;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+       LOGIN CARD
+    ═══════════════════════════════════════════════════════════════════ */
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 440px;
+        }
+
+        .login-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px 36px;
+            box-shadow:
+                0 0 0 1px rgba(45, 212, 191, 0.05),
+                0 24px 64px rgba(0, 0, 0, 0.5),
+                0 0 80px rgba(45, 212, 191, 0.04);
+            animation: cardIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(32px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ── Brand mark ───────────────────────────────────────────────────── */
+        .login-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 32px;
+            animation: fadeUp 0.5s 0.1s both;
+        }
+
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            color: var(--bg);
+            box-shadow: 0 0 30px var(--accent-glow);
+            flex-shrink: 0;
+        }
+
+        .brand-text .brand-title {
+            display: block;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-pri);
+            line-height: 1.2;
+        }
+
+        .brand-text .brand-sub {
+            font-size: 0.72rem;
+            color: var(--accent);
+            font-family: var(--mono);
+            letter-spacing: 0.1em;
+        }
+
+        /* ── Heading ──────────────────────────────────────────────────────── */
+        .login-heading {
+            text-align: center;
+            margin-bottom: 28px;
+            animation: fadeUp 0.5s 0.15s both;
+        }
+
+        .login-heading h1 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text-pri);
+            margin: 0 0 6px;
+        }
+
+        .login-heading p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* ── Divider ──────────────────────────────────────────────────────── */
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            animation: fadeUp 0.5s 0.2s both;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ── Form ─────────────────────────────────────────────────────────── */
+        .login-form {
+            animation: fadeUp 0.5s 0.25s both;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-label-custom {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-sec);
+            margin-bottom: 8px;
+        }
+
+        .form-label-custom i {
+            color: var(--accent);
+            font-size: 0.75rem;
+            width: 14px;
+            text-align: center;
+        }
+
+        /* Input wrapper for icon + eye-toggle */
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-wrap .input-icon {
+            position: absolute;
+            top: 50%;
+            right: 14px;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            pointer-events: none;
+            transition: color 0.2s;
+            z-index: 2;
+        }
+
+        .input-wrap input:focus~.input-icon {
+            color: var(--accent);
+        }
+
+        .form-control-custom {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-pri);
+            font-family: var(--font);
+            font-size: 0.9rem;
+            padding: 12px 42px 12px 16px;
+            /* right padding for icon */
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            caret-color: var(--accent);
+        }
+
+        /* LTR for email & password so characters render naturally */
+        .form-control-custom[type="email"],
+        .form-control-custom[type="password"],
+        .form-control-custom[type="text"][data-ltr] {
+            direction: ltr;
+            text-align: right;
+        }
+
+        .form-control-custom::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-control-custom:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: #0f1f38;
+        }
+
+        /* Eye toggle button (password) */
+        .eye-toggle {
+            position: absolute;
+            top: 50%;
+            left: 12px;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            padding: 4px;
+            color: var(--text-muted);
+            cursor: pointer;
+            z-index: 2;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        .eye-toggle:hover {
+            color: var(--accent);
+        }
+
+        /* ── Remember me + forgot ─────────────────────────────────────────── */
+        .form-extras {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .remember-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.82rem;
+            color: var(--text-sec);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .remember-check {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-input);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s, border-color 0.2s;
+            position: relative;
+        }
+
+        .remember-check:checked {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .remember-check:checked::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            width: 5px;
+            height: 8px;
+            border: 2px solid var(--bg);
+            border-top: none;
+            border-right: none;
+            border-left: 2px solid var(--bg);
+            border-bottom: 2px solid var(--bg);
+            transform: rotate(-45deg) translate(1px, -1px);
+        }
+
+        .forgot-link {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .forgot-link:hover {
+            color: var(--accent);
+        }
+
+        /* ── Submit button ────────────────────────────────────────────────── */
+        .btn-login {
+            width: 100%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: var(--bg);
+            border: none;
+            border-radius: 10px;
+            font-family: var(--font);
+            font-size: 0.95rem;
+            font-weight: 700;
+            padding: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: 0.02em;
+        }
+
+        .btn-login:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 28px var(--accent-glow);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        /* Shimmer ripple on hover */
+        .btn-login::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.12) 50%, transparent 70%);
+            transform: translateX(-100%);
+            transition: transform 0.55s ease;
+        }
+
+        .btn-login:hover::after {
+            transform: translateX(100%);
+        }
+
+        /* Loading spinner (toggled by JS on submit) */
+        .btn-login .btn-spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(15, 26, 42, 0.4);
+            border-top-color: var(--bg);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        .btn-login.loading .btn-spinner {
+            display: block;
+        }
+
+        .btn-login.loading .btn-text {
+            opacity: 0.6;
+        }
+
+        .btn-login.loading .btn-icon {
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ── Footer note ──────────────────────────────────────────────────── */
+        .login-footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            animation: fadeUp 0.5s 0.35s both;
+            line-height: 1.6;
+        }
+
+        .login-footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .login-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Demo credentials hint ────────────────────────────────────────── */
+        .demo-hint {
+            margin-top: 20px;
+            padding: 12px 14px;
+            background: rgba(45, 212, 191, 0.06);
+            border: 1px solid rgba(45, 212, 191, 0.15);
+            border-radius: 10px;
+            font-size: 0.78rem;
+            color: var(--text-sec);
+            line-height: 1.6;
+            animation: fadeUp 0.5s 0.4s both;
+        }
+
+        .demo-hint strong {
+            color: var(--accent);
+            font-family: var(--mono);
+        }
+
+        .demo-hint .demo-title {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ── Stagger utility ──────────────────────────────────────────────── */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── Responsive tweaks ────────────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 28px 20px;
+                border-radius: 16px;
+            }
+
+            .brand-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1.1rem;
+                border-radius: 11px;
+            }
+
+            .brand-text .brand-title {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    {# Ambient background orbs #}
+    <div class="bg-orb bg-orb-1" aria-hidden="true"></div>
+    <div class="bg-orb bg-orb-2" aria-hidden="true"></div>
+
+    {# ════════════════════════════════════════════════════════════════════
+    FLASH MESSAGES (dismissible, auto-close)
+    ════════════════════════════════════════════════════════════════════ #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-stack" role="alert" aria-live="polite">
+        {% for category, message in messages %}
+        <div class="flash-item alert-{{ category }}">
+            <span class="flash-icon" aria-hidden="true">
+                {% if category == 'success' %}<i class="fa-solid fa-circle-check"></i>
+                {% elif category == 'danger' %}<i class="fa-solid fa-circle-xmark"></i>
+                {% elif category == 'warning' %}<i class="fa-solid fa-triangle-exclamation"></i>
+                {% else %}<i class="fa-solid fa-circle-info"></i>
+                {% endif %}
+            </span>
+            <span class="flash-text">{{ message }}</span>
+            <button class="flash-close" onclick="this.closest('.flash-item').remove()" aria-label="إغلاق الإشعار"
+                type="button">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+
+    {# ════════════════════════════════════════════════════════════════════
+    LOGIN CARD
+    ════════════════════════════════════════════════════════════════════ #}
+    <div class="login-wrapper">
+        <div class="login-card" role="main">
+
+            {# ── Brand ────────────────────────────────────────────────────── #}
+            <div class="login-brand" aria-label="أكاديمية شيفرة">
+                <div class="brand-icon" aria-hidden="true">
+                    <i class="fa-solid fa-code"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">أكاديمية شيفرة</span>
+                    <span class="brand-sub">SHYFRA ACADEMY</span>
+                </div>
+            </div>
+
+            {# ── Heading ──────────────────────────────────────────────────── #}
+            <div class="login-heading">
+                <h1>مرحباً بعودتك 👋</h1>
+                <p>أدخل بياناتك للوصول إلى لوحة التحكم</p>
+            </div>
+
+            <div class="login-divider" aria-hidden="true">تسجيل الدخول</div>
+
+            {# ── Login Form ───────────────────────────────────────────────── #}
+            <form id="loginForm" class="login-form" method="POST" action="{{ url_for('login_post') }}" novalidate
+                aria-label="نموذج تسجيل الدخول">
+
+                {# CSRF token — uncomment when Flask-WTF is active #}
+                {# {{ form.hidden_tag() }} #}
+
+                {# ── Email Field ────────────────────────────────────────────── #}
+                <div class="form-group">
+                    <label class="form-label-custom" for="email">
+                        <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                        البريد الإلكتروني
+                    </label>
+                    <div class="input-wrap">
+                        <input type="email" id="email" name="email" class="form-control-custom"
+                            placeholder="admin@shyfra.dz" autocomplete="email" inputmode="email" required
+                            aria-required="true" aria-describedby="emailHelp"
+                            value="{{ request.form.get('email', '') }}" />
+                        <span class="input-icon" aria-hidden="true">
+                            <i class="fa-regular fa-envelope"></i>
+                        </span>
+                    </div>
+                </div>
+
+                {# ── Password Field ─────────────────────────────────────────── #}
+                <div class="form-group">
+                    <label class="form-label-custom" for="password">
+                        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                        كلمة المرور
+                    </label>
+                    <div class="input-wrap">
+                        <input type="password" id="password" name="password" class="form-control-custom"
+                            placeholder="••••••••••" autocomplete="current-password" required aria-required="true" />
+                        <span class="input-icon" aria-hidden="true">
+                            <i class="fa-solid fa-lock" id="lockIcon"></i>
+                        </span>
+                        {# Eye toggle — show/hide password #}
+                        <button type="button" class="eye-toggle" id="eyeToggle" aria-label="إظهار أو إخفاء كلمة المرور"
+                            aria-pressed="false">
+                            <i class="fa-regular fa-eye" id="eyeIcon" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {# ── Remember me + Forgot password ──────────────────────────── #}
+                <div class="form-extras">
+                    <label class="remember-label">
+                        <input type="checkbox" class="remember-check" name="remember" id="remember"
+                            aria-label="تذكرني" />
+                        تذكرني
+                    </label>
+                    <a href="#" class="forgot-link" aria-label="نسيت كلمة المرور">
+                        نسيت كلمة المرور؟
+                    </a>
+                </div>
+
+                {# ── Submit ─────────────────────────────────────────────────── #}
+                <button type="submit" class="btn-login" id="submitBtn" aria-label="تسجيل الدخول">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    <i class="fa-solid fa-arrow-right-to-bracket btn-icon" aria-hidden="true"></i>
+                    <span class="btn-text">تسجيل الدخول</span>
+                </button>
+
+            </form>
+
+            {# ── Demo credentials hint (remove in production) ─────────────── #}
+            <div class="demo-hint" role="note" aria-label="بيانات الدخول التجريبية">
+                <div class="demo-title">
+                    <i class="fa-solid fa-flask-vial" aria-hidden="true"></i>
+                    بيانات تجريبية للاختبار
+                </div>
+                <div>
+                    <strong>admin@shyfra.dz</strong>
+                    &nbsp;/&nbsp;
+                    <strong>Password@123</strong>
+                </div>
+            </div>
+
+        </div>{# /.login-card #}
+
+        {# ── Footer note ──────────────────────────────────────────────────── #}
+        <div class="login-footer">
+            <span>أكاديمية شيفرة © {{ 2025 }}</span>
+            &nbsp;·&nbsp;
+            <a href="{{ url_for('health_check') }}">حالة النظام</a>
+        </div>
+
+    </div>{# /.login-wrapper #}
+
+    {# Bootstrap JS #}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmFBDTiB0a35FmT6FTKT7lsMHrr" crossorigin="anonymous">
+        </script>
+
+    <script>
+        (function () {
+            'use strict';
+
+            /* ── 1. Password show / hide toggle ─────────────────────────────── */
+            const passwordInput = document.getElementById('password');
+            const eyeToggle = document.getElementById('eyeToggle');
+            const eyeIcon = document.getElementById('eyeIcon');
+
+            eyeToggle.addEventListener('click', function () {
+                const isHidden = passwordInput.type === 'password';
+                passwordInput.type = isHidden ? 'text' : 'password';
+                eyeIcon.className = isHidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
+                eyeToggle.setAttribute('aria-pressed', String(isHidden));
+            });
+
+            /* ── 2. Submit loading state ─────────────────────────────────────── */
+            const form = document.getElementById('loginForm');
+            const submitBtn = document.getElementById('submitBtn');
+
+            form.addEventListener('submit', function () {
+                // Show spinner only if basic HTML5 validation passes
+                if (form.checkValidity()) {
+                    submitBtn.classList.add('loading');
+                    submitBtn.disabled = true;
+                }
+            });
+
+            /* ── 3. Auto-dismiss flash messages after 6 s ────────────────────── */
+            document.querySelectorAll('.flash-item').forEach(function (el) {
+                setTimeout(function () {
+                    el.style.transition = 'opacity 0.5s, transform 0.5s';
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateY(-10px)';
+                    setTimeout(function () { el.remove(); }, 500);
+                }, 6000);
+            });
+
+            /* ── 4. Input focus border colour sync with label icon ───────────── */
+            document.querySelectorAll('.form-control-custom').forEach(function (inp) {
+                inp.addEventListener('focus', function () {
+                    this.closest('.input-wrap').querySelector('.input-icon i')
+                        ?.classList.add('text-accent');
+                });
+                inp.addEventListener('blur', function () {
+                    this.closest('.input-wrap').querySelector('.input-icon i')
+                        ?.classList.remove('text-accent');
+                });
+            });
+
+        })();
+    </script>
+
+</body>
+
+</html>

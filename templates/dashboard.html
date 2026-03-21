@@ -1,0 +1,853 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+dashboard.html — لوحة التحكم الرئيسية
+Extends : base.html
+Route : GET / or GET /dashboard
+Variables: active_monthly, active_yearly, total_active, total_expired,
+total_suspended, total_canceled, renewals_this_month,
+revenue_this_month, expiring_soon, alerts_count,
+today, EXPIRY_ALERT_DAYS
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}لوحة التحكم — أكاديمية شيفرة{% endblock %}
+{% block page_title %}لوحة التحكم{% endblock %}
+
+{# ── Page-level extra styles ─────────────────────────────────────────────── #}
+{% block head_extra %}
+<style>
+    /* ── Stat card accent variants ─────────────────────────────────────── */
+    .stat-icon-teal {
+        background: rgba(45, 212, 191, 0.12);
+        color: #2dd4bf;
+    }
+
+    .stat-icon-indigo {
+        background: rgba(99, 102, 241, 0.12);
+        color: #818cf8;
+    }
+
+    .stat-icon-rose {
+        background: rgba(239, 68, 68, 0.12);
+        color: #f87171;
+    }
+
+    .stat-icon-amber {
+        background: rgba(245, 158, 11, 0.12);
+        color: #fbbf24;
+    }
+
+    .stat-icon-emerald {
+        background: rgba(16, 185, 129, 0.12);
+        color: #34d399;
+    }
+
+    .stat-icon-sky {
+        background: rgba(14, 165, 233, 0.12);
+        color: #38bdf8;
+    }
+
+    /* ── Stat card trend chip ──────────────────────────────────────────── */
+    .trend-up {
+        color: #34d399;
+    }
+
+    .trend-down {
+        color: #f87171;
+    }
+
+    .trend-flat {
+        color: var(--text-muted);
+    }
+
+    /* ── Donut summary ring (pure CSS) ────────────────────────────────── */
+    .summary-ring-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .ring-chart {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        background: conic-gradient(#2dd4bf 0% calc(var(--pct-active, 0) * 1%),
+                #818cf8 calc(var(--pct-active, 0) * 1%) calc((var(--pct-active, 0) + var(--pct-expired, 0)) * 1%),
+                #fbbf24 calc((var(--pct-active, 0) + var(--pct-expired, 0)) * 1%) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .ring-chart::after {
+        content: '';
+        position: absolute;
+        inset: 16px;
+        background: var(--surface-card);
+        border-radius: 50%;
+    }
+
+    .ring-label {
+        font-size: 0.62rem;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .ring-legend {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .ring-legend li {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+
+    .ring-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    /* ── Revenue display ──────────────────────────────────────────────── */
+    .revenue-amount {
+        font-size: 1.65rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #2dd4bf, #818cf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1.1;
+    }
+
+    .revenue-currency {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        vertical-align: super;
+        margin-right: 3px;
+    }
+
+    /* ── Alert table rows ─────────────────────────────────────────────── */
+    .alert-row-danger {
+        border-right: 3px solid var(--brand-danger) !important;
+    }
+
+    .alert-row-warning {
+        border-right: 3px solid var(--brand-warning) !important;
+    }
+
+    .alert-row-safe {
+        border-right: 3px solid var(--brand-success) !important;
+    }
+
+    /* ── Days remaining pill ──────────────────────────────────────────── */
+    .days-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .days-pill-danger {
+        background: rgba(239, 68, 68, 0.12);
+        color: #f87171;
+    }
+
+    .days-pill-warning {
+        background: rgba(245, 158, 11, 0.12);
+        color: #fbbf24;
+    }
+
+    .days-pill-safe {
+        background: rgba(16, 185, 129, 0.12);
+        color: #34d399;
+    }
+
+    /* ── Avatar chip in table ─────────────────────────────────────────── */
+    .member-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .member-chip-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .member-chip-name {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .member-chip-email {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Section header divider ───────────────────────────────────────── */
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 0;
+    }
+
+    .section-title i {
+        color: var(--brand-accent);
+    }
+
+    .section-badge {
+        font-size: 0.7rem;
+        padding: 3px 9px;
+        border-radius: 20px;
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        font-weight: 600;
+    }
+
+    /* ── Progress bar for relative comparisons ────────────────────────── */
+    .mini-bar {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--surface-border);
+        margin-top: 10px;
+        overflow: hidden;
+    }
+
+    .mini-bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 1s ease;
+    }
+
+    /* ── Animated counter (JS-driven) ────────────────────────────────── */
+    .stat-value[data-target] {
+        transition: none;
+    }
+
+    /* ── "No alerts" empty card ───────────────────────────────────────── */
+    .no-alerts-wrap {
+        padding: 40px 20px;
+        text-align: center;
+    }
+
+    .no-alerts-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        margin: 0 auto 16px;
+        background: rgba(16, 185, 129, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: #34d399;
+    }
+
+    /* ── Card entrance animation ──────────────────────────────────────── */
+    .stat-card {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    .stat-card.visible {
+        animation: cardReveal 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes cardReveal {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+{% endblock %}
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+CONTENT
+════════════════════════════════════════════════════════════════════════════ #}
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">لوحة التحكم</h1>
+        <p class="page-subtitle">
+            <i class="fa-regular fa-calendar-days me-1" aria-hidden="true"></i>
+            {# today is passed from the Flask route #}
+            {{ today.strftime('%A، %d %B %Y') if today else '' }}
+            &nbsp;·&nbsp;
+            نظرة شاملة على أكاديمية شيفرة
+        </p>
+    </div>
+
+    {# Quick action button #}
+    <a href="#" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>اشتراك جديد</span>
+    </a>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+ROW 1 — STAT CARDS (4 KPI cards)
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="row g-4 mb-4" id="stat-cards-row" aria-label="بطاقات الإحصائيات الرئيسية">
+
+    {# ── Card 1 : Active Monthly ────────────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card" role="region" aria-label="الاشتراكات الشهرية النشطة" data-delay="0">
+            <div class="d-flex align-items-start justify-content-between">
+                <div class="stat-icon stat-icon-teal" aria-hidden="true">
+                    <i class="fa-solid fa-calendar-check"></i>
+                </div>
+                <span class="badge badge-custom badge-active">نشط</span>
+            </div>
+
+            <div class="stat-value mt-3" data-target="{{ active_monthly }}" aria-label="{{ active_monthly }} اشتراك">
+                {{ active_monthly }}
+            </div>
+            <div class="stat-label">اشتراكات شهرية نشطة</div>
+
+            {# Mini progress bar: monthly share of total active #}
+            {% set monthly_pct = ((active_monthly / total_active * 100) | int) if total_active > 0 else 0 %}
+            <div class="mini-bar mt-2" aria-hidden="true">
+                <div class="mini-bar-fill" style="width: {{ monthly_pct }}%; background: #2dd4bf;">
+                </div>
+            </div>
+            <div class="stat-trend mt-1">
+                <span class="trend-flat" aria-label="نسبة من إجمالي النشطة">
+                    <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+                    {{ monthly_pct }}% من الاشتراكات النشطة
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# ── Card 2 : Active Yearly ─────────────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card" role="region" aria-label="الاشتراكات السنوية النشطة" data-delay="80">
+            <div class="d-flex align-items-start justify-content-between">
+                <div class="stat-icon stat-icon-indigo" aria-hidden="true">
+                    <i class="fa-solid fa-star"></i>
+                </div>
+                <span class="badge badge-custom badge-active">نشط</span>
+            </div>
+
+            <div class="stat-value mt-3" data-target="{{ active_yearly }}" aria-label="{{ active_yearly }} اشتراك">
+                {{ active_yearly }}
+            </div>
+            <div class="stat-label">اشتراكات سنوية نشطة</div>
+
+            {% set yearly_pct = ((active_yearly / total_active * 100) | int) if total_active > 0 else 0 %}
+            <div class="mini-bar mt-2" aria-hidden="true">
+                <div class="mini-bar-fill" style="width: {{ yearly_pct }}%; background: #818cf8;">
+                </div>
+            </div>
+            <div class="stat-trend mt-1">
+                <span class="trend-up" aria-label="نسبة من إجمالي النشطة">
+                    <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+                    {{ yearly_pct }}% من الاشتراكات النشطة
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# ── Card 3 : Expired Subscriptions ────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card" role="region" aria-label="الاشتراكات المنتهية" data-delay="160">
+            <div class="d-flex align-items-start justify-content-between">
+                <div class="stat-icon stat-icon-rose" aria-hidden="true">
+                    <i class="fa-solid fa-hourglass-end"></i>
+                </div>
+                <span class="badge badge-custom badge-expired">منتهي</span>
+            </div>
+
+            <div class="stat-value mt-3" data-target="{{ total_expired }}"
+                aria-label="{{ total_expired }} اشتراك منتهٍ">
+                {{ total_expired }}
+            </div>
+            <div class="stat-label">اشتراكات منتهية</div>
+
+            <div class="mini-bar mt-2" aria-hidden="true">
+                {% set all_subs = total_active + total_expired + total_suspended + total_canceled %}
+                {% set expired_pct = ((total_expired / all_subs * 100) | int) if all_subs > 0 else 0 %}
+                <div class="mini-bar-fill" style="width: {{ expired_pct }}%; background: #f87171;">
+                </div>
+            </div>
+            <div class="stat-trend mt-1">
+                <span class="trend-down">
+                    <i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i>
+                    {{ expired_pct }}% من إجمالي الاشتراكات
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# ── Card 4 : Renewals This Month ───────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="stat-card" role="region" aria-label="تجديدات هذا الشهر" data-delay="240">
+            <div class="d-flex align-items-start justify-content-between">
+                <div class="stat-icon stat-icon-amber" aria-hidden="true">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </div>
+                <span class="badge badge-custom"
+                    style="background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.25);">
+                    هذا الشهر
+                </span>
+            </div>
+
+            <div class="stat-value mt-3" data-target="{{ renewals_this_month }}"
+                aria-label="{{ renewals_this_month }} تجديد">
+                {{ renewals_this_month }}
+            </div>
+            <div class="stat-label">تجديدات مسجّلة هذا الشهر</div>
+
+            <div class="stat-trend mt-3 pt-1" style="border-top:1px solid var(--surface-border);">
+                <i class="fa-solid fa-circle-dollar-to-slot me-1 text-success" aria-hidden="true"></i>
+                <span style="color:var(--text-secondary); font-size:0.8rem;">
+                    الإيرادات:&nbsp;
+                </span>
+                <span class="revenue-amount" style="font-size:1rem;"
+                    aria-label="إيرادات هذا الشهر {{ revenue_this_month }} دج">
+                    <span class="revenue-currency">دج</span>
+                    {{ "{:,.0f}".format(revenue_this_month) }}
+                </span>
+            </div>
+        </div>
+    </div>
+</div>{# /.row stat cards #}
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+ROW 2 — SUMMARY PANEL + QUICK STATS SIDEBAR
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="row g-4 mb-4">
+
+    {# ── Donut overview panel ───────────────────────────────────────────── #}
+    <div class="col-12 col-lg-4">
+        <div class="content-card h-100" aria-label="ملخص حالة الاشتراكات">
+            <div class="content-card-header">
+                <h2 class="content-card-title">
+                    <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
+                    توزيع الاشتراكات
+                </h2>
+            </div>
+
+            {# Pure CSS donut ring — percentages computed by Jinja #}
+            {% set ring_total = total_active + total_expired + total_suspended if (total_active + total_expired +
+            total_suspended) > 0 else 1 %}
+            {% set pct_active = ((total_active / ring_total) * 100) | round | int %}
+            {% set pct_expired = ((total_expired / ring_total) * 100) | round | int %}
+            {% set pct_suspended= ((total_suspended / ring_total) * 100) | round | int %}
+
+            <div class="d-flex align-items-center justify-content-around gap-3 py-2">
+                <div class="summary-ring-wrap" aria-hidden="true">
+                    <div class="ring-chart" style="--pct-active:{{ pct_active }};--pct-expired:{{ pct_expired }};">
+                    </div>
+                    <span class="ring-label">الاشتراكات</span>
+                </div>
+
+                <ul class="ring-legend" role="list" aria-label="مفتاح الرسم البياني">
+                    <li role="listitem">
+                        <span class="ring-dot" style="background:#2dd4bf;" aria-hidden="true"></span>
+                        <span>نشط
+                            <strong style="color:var(--text-primary);">{{ total_active }}</strong>
+                        </span>
+                    </li>
+                    <li role="listitem">
+                        <span class="ring-dot" style="background:#818cf8;" aria-hidden="true"></span>
+                        <span>منتهي
+                            <strong style="color:var(--text-primary);">{{ total_expired }}</strong>
+                        </span>
+                    </li>
+                    <li role="listitem">
+                        <span class="ring-dot" style="background:#fbbf24;" aria-hidden="true"></span>
+                        <span>معلّق
+                            <strong style="color:var(--text-primary);">{{ total_suspended }}</strong>
+                        </span>
+                    </li>
+                    <li role="listitem">
+                        <span class="ring-dot" style="background:#f87171;" aria-hidden="true"></span>
+                        <span>ملغى
+                            <strong style="color:var(--text-primary);">{{ total_canceled }}</strong>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
+            {# Total active big number #}
+            <div class="text-center mt-3 pt-3" style="border-top:1px solid var(--surface-border);">
+                <div
+                    style="font-size:0.72rem;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">
+                    إجمالي النشطة
+                </div>
+                <div style="font-size:2rem;font-weight:700;color:var(--text-primary);">
+                    {{ total_active }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Revenue + Alerts summary side panel ────────────────────────────── #}
+    <div class="col-12 col-lg-8">
+        <div class="content-card h-100">
+            <div class="content-card-header">
+                <h2 class="content-card-title">
+                    <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+                    ملخص سريع
+                </h2>
+                <span style="font-size:0.75rem;color:var(--text-muted);">
+                    آخر تحديث: الآن
+                </span>
+            </div>
+
+            <div class="row g-3">
+
+                {# Revenue this month #}
+                <div class="col-12 col-sm-6">
+                    <div style="background:var(--surface-bg);border:1px solid var(--surface-border);
+                      border-radius:10px;padding:16px;">
+                        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;
+                        text-transform:uppercase;letter-spacing:0.08em;">
+                            <i class="fa-solid fa-coins me-1" aria-hidden="true"></i>
+                            إيرادات الشهر الحالي
+                        </div>
+                        <div class="revenue-amount" aria-label="{{ revenue_this_month }} دينار جزائري">
+                            <span class="revenue-currency">دج</span>
+                            {{ "{:,.0f}".format(revenue_this_month) }}
+                        </div>
+                    </div>
+                </div>
+
+                {# Renewal alerts count #}
+                <div class="col-12 col-sm-6">
+                    <div style="background:var(--surface-bg);border:1px solid
+                      {% if alerts_count > 0 %}rgba(239,68,68,0.35){% else %}var(--surface-border){% endif %};
+                      border-radius:10px;padding:16px;">
+                        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;
+                        text-transform:uppercase;letter-spacing:0.08em;">
+                            <i class="fa-solid fa-triangle-exclamation me-1"
+                                style="color:{% if alerts_count > 0 %}#f87171{% else %}var(--text-muted){% endif %};"
+                                aria-hidden="true"></i>
+                            تنبيهات قريبة من الانتهاء
+                        </div>
+                        <div style="font-size:2rem;font-weight:700;
+                        color:{% if alerts_count > 0 %}#f87171{% else %}#34d399{% endif %};"
+                            aria-label="{{ alerts_count }} تنبيه">
+                            {{ alerts_count }}
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">
+                            خلال {{ EXPIRY_ALERT_DAYS }} يوماً القادمة
+                        </div>
+                    </div>
+                </div>
+
+                {# Mini breakdown list #}
+                <div class="col-12">
+                    <div style="background:var(--surface-bg);border:1px solid var(--surface-border);
+                      border-radius:10px;padding:16px;">
+                        <div class="row g-2 text-center">
+                            <div class="col-6 col-md-3">
+                                <div style="font-size:1.3rem;font-weight:700;color:#2dd4bf;">
+                                    {{ total_active }}</div>
+                                <div style="font-size:0.72rem;color:var(--text-muted);">نشط</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div style="font-size:1.3rem;font-weight:700;color:#f87171;">
+                                    {{ total_expired }}</div>
+                                <div style="font-size:0.72rem;color:var(--text-muted);">منتهي</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div style="font-size:1.3rem;font-weight:700;color:#fbbf24;">
+                                    {{ total_suspended }}</div>
+                                <div style="font-size:0.72rem;color:var(--text-muted);">معلّق</div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div style="font-size:1.3rem;font-weight:700;color:#94a3b8;">
+                                    {{ total_canceled }}</div>
+                                <div style="font-size:0.72rem;color:var(--text-muted);">ملغى</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>{# /.row quick stats #}
+        </div>
+    </div>
+
+</div>{# /.row summary #}
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+ROW 3 — RENEWAL ALERTS TABLE (تنبيهات التجديد)
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="row g-4">
+    <div class="col-12">
+        <div class="content-card" aria-label="جدول تنبيهات الاشتراكات القريبة من الانتهاء" role="region">
+
+            {# ── Section Header ─────────────────────────────────────────────── #}
+            <div class="content-card-header">
+                <h2 class="section-title">
+                    <i class="fa-solid fa-bell" aria-hidden="true"></i>
+                    تنبيهات التجديد
+                    {% if alerts_count > 0 %}
+                    <span class="section-badge" aria-label="{{ alerts_count }} تنبيه">
+                        {{ alerts_count }}
+                    </span>
+                    {% endif %}
+                </h2>
+
+                {# Filter chips — functional in the full app; placeholder here #}
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span style="font-size:0.75rem;color:var(--text-muted);">
+                        تنتهي خلال {{ EXPIRY_ALERT_DAYS }} يوماً
+                    </span>
+                    <a href="#" class="btn btn-outline-subtle btn-sm" style="font-size:0.75rem;padding:4px 12px;">
+                        <i class="fa-solid fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>
+                        عرض الكل
+                    </a>
+                </div>
+            </div>
+
+            {# ── Table ─────────────────────────────────────────────────────── #}
+            {% if expiring_soon %}
+            <div class="table-responsive">
+                <table class="table table-dark-custom mb-0" aria-label="قائمة الاشتراكات القريبة من الانتهاء">
+                    <thead>
+                        <tr>
+                            <th scope="col" style="width:40px;" aria-hidden="true"></th>
+                            <th scope="col">العضو</th>
+                            <th scope="col">الخطة</th>
+                            <th scope="col">تاريخ الانتهاء</th>
+                            <th scope="col">الأيام المتبقية</th>
+                            <th scope="col">الحالة</th>
+                            <th scope="col" class="text-center">إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# expiring_soon is a list of tuples:
+                        (Subscription, fname, lname, email, plan_name)
+                        from the Flask route joined query. #}
+                        {% for sub, fname, lname, email, plan_name in expiring_soon %}
+
+                        {# Determine urgency level using model property #}
+                        {% set days_left = (sub.end_date - today).days %}
+                        {% if days_left <= 5 %} {% set urgency='danger' %} {% elif days_left <=10 %} {% set
+                            urgency='warning' %} {% else %} {% set urgency='safe' %} {% endif %} <tr
+                            class="alert-row-{{ urgency }}"
+                            aria-label="اشتراك {{ fname }} {{ lname }} — {{ days_left }} يوم متبقٍّ">
+
+                            {# Row index #}
+                            <td style="color:var(--text-muted);font-size:0.78rem;
+                           padding-right:16px !important;">
+                                {{ loop.index }}
+                            </td>
+
+                            {# Member chip #}
+                            <td>
+                                <div class="member-chip">
+                                    <div class="member-chip-avatar" aria-hidden="true" title="{{ fname }} {{ lname }}">
+                                        {{ fname[0] | upper }}
+                                    </div>
+                                    <div>
+                                        <div class="member-chip-name">{{ fname }} {{ lname }}</div>
+                                        <div class="member-chip-email">{{ email }}</div>
+                                    </div>
+                                </div>
+                            </td>
+
+                            {# Plan name #}
+                            <td>
+                                <span style="color:var(--text-primary);font-weight:500;">
+                                    <i class="fa-solid fa-tag me-1" style="color:var(--brand-accent);font-size:0.75rem;"
+                                        aria-hidden="true"></i>
+                                    {{ plan_name }}
+                                </span>
+                            </td>
+
+                            {# End date #}
+                            <td>
+                                <span style="font-family:var(--font-mono);font-size:0.82rem;
+                               color:var(--text-secondary);" aria-label="{{ sub.end_date.strftime('%d/%m/%Y') }}">
+                                    {{ sub.end_date.strftime('%Y-%m-%d') }}
+                                </span>
+                            </td>
+
+                            {# Days remaining pill #}
+                            <td>
+                                <span class="days-pill days-pill-{{ urgency }}" aria-label="{{ days_left }} يوم متبقٍّ">
+                                    <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                                    {% if days_left == 0 %}
+                                    ينتهي اليوم
+                                    {% elif days_left == 1 %}
+                                    يوم واحد
+                                    {% else %}
+                                    {{ days_left }} يوم
+                                    {% endif %}
+                                </span>
+                            </td>
+
+                            {# Status badge #}
+                            <td>
+                                <span class="badge badge-custom badge-active"
+                                    aria-label="حالة الاشتراك: {{ sub.status.value }}">
+                                    <i class="fa-solid fa-circle"
+                                        style="font-size:0.5rem;vertical-align:middle;margin-left:4px;"
+                                        aria-hidden="true"></i>
+                                    {{ sub.status.value }}
+                                </span>
+                            </td>
+
+                            {# Action button #}
+                            <td class="text-center">
+                                <button type="button" class="btn btn-outline-subtle btn-sm"
+                                    style="font-size:0.75rem;padding:5px 12px;"
+                                    aria-label="تجديد اشتراك {{ fname }} {{ lname }}">
+                                    <i class="fa-solid fa-arrows-rotate me-1" aria-hidden="true"></i>
+                                    تجديد
+                                </button>
+                            </td>
+
+                            </tr>
+                            {% endfor %}
+                    </tbody>
+                </table>
+            </div>{# /.table-responsive #}
+
+            {# ── Table Footer: summary line ─────────────────────────────────── #}
+            <div class="d-flex align-items-center justify-content-between
+                  pt-3 mt-1 flex-wrap gap-2" style="border-top:1px solid var(--surface-border);">
+                <span style="font-size:0.78rem;color:var(--text-muted);">
+                    يُعرض
+                    <strong style="color:var(--text-secondary);">{{ expiring_soon | length }}</strong>
+                    نتيجة
+                </span>
+                <a href="#" class="btn btn-outline-subtle btn-sm" style="font-size:0.75rem;padding:4px 14px;">
+                    <i class="fa-solid fa-list me-1" aria-hidden="true"></i>
+                    عرض جميع الاشتراكات
+                </a>
+            </div>
+
+            {% else %}
+
+            {# ── Empty State — no alerts ──────────────────────────────────── #}
+            <div class="no-alerts-wrap">
+                <div class="no-alerts-icon" aria-hidden="true">
+                    <i class="fa-solid fa-shield-check"></i>
+                </div>
+                <h3 style="font-size:1rem;font-weight:600;color:var(--text-primary);margin-bottom:8px;">
+                    لا توجد تنبيهات حالياً
+                </h3>
+                <p style="font-size:0.875rem;color:var(--text-muted);max-width:320px;margin:0 auto;">
+                    جميع الاشتراكات النشطة لن تنتهي خلال الـ {{ EXPIRY_ALERT_DAYS }} يوماً القادمة.
+                </p>
+            </div>
+
+            {% endif %}
+
+        </div>{# /.content-card #}
+    </div>
+</div>{# /.row alerts #}
+
+{% endblock %}{# /content #}
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+SCRIPTS — Card entrance animation + counter animation
+════════════════════════════════════════════════════════════════════════════ #}
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* ── 1. Staggered card entrance via IntersectionObserver ─────────────── */
+        const cards = document.querySelectorAll('#stat-cards-row .stat-card');
+        const observer = new IntersectionObserver(
+            function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        const delay = parseInt(entry.target.dataset.delay || '0', 10);
+                        setTimeout(function () {
+                            entry.target.classList.add('visible');
+                        }, delay);
+                        observer.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.1 }
+        );
+        cards.forEach(function (card) { observer.observe(card); });
+
+        /* ── 2. Animated number counter ─────────────────────────────────────── */
+        function animateCounter(el) {
+            const target = parseInt(el.dataset.target || el.textContent, 10);
+            if (isNaN(target) || target === 0) return;
+            const duration = 900;   // ms
+            const start = performance.now();
+            (function tick(now) {
+                const elapsed = Math.min(now - start, duration);
+                const progress = elapsed / duration;
+                // easeOutExpo
+                const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+                el.textContent = Math.floor(eased * target).toLocaleString('ar-DZ');
+                if (progress < 1) requestAnimationFrame(tick);
+                else el.textContent = target.toLocaleString('ar-DZ');
+            })(start);
+        }
+
+        /* Trigger counters once cards are visible */
+        const counterObserver = new IntersectionObserver(
+            function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        const valueEl = entry.target.querySelector('.stat-value[data-target]');
+                        if (valueEl) animateCounter(valueEl);
+                        counterObserver.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.3 }
+        );
+        cards.forEach(function (card) { counterObserver.observe(card); });
+
+        /* ── 3. Mini progress bar animate-in ────────────────────────────────── */
+        document.querySelectorAll('.mini-bar-fill').forEach(function (bar) {
+            const targetWidth = bar.style.width;
+            bar.style.width = '0';
+            setTimeout(function () { bar.style.width = targetWidth; }, 300);
+        });
+
+    })();
+</script>
+{% endblock %}

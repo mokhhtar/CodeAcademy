@@ -1,0 +1,1048 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+groups.html — إدارة المجموعات
+Extends : base.html
+Route : GET /groups
+Variables: groups list[Group]
+supervisors list[User] (Supervisor role only)
+edit_group Group | undefined (present when editing)
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}إدارة المجموعات — أكاديمية شيفرة{% endblock %}
+{% block page_title %}المجموعات{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Search bar ────────────────────────────────────────────────────── */
+    .search-wrap {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: .85rem;
+        pointer-events: none;
+        transition: color .2s;
+    }
+
+    .search-input {
+        width: 100%;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 40px 10px 16px;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-input:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    /* ── Bootstrap modal dark overrides ───────────────────────────────── */
+    .modal-content {
+        background: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: 16px;
+        color: var(--text-primary);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid var(--surface-border);
+        padding: 18px 22px;
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--surface-border);
+        padding: 14px 22px;
+    }
+
+    .modal-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .modal-title i {
+        color: #2dd4bf;
+    }
+
+    .btn-close-modal {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 4px;
+        line-height: 1;
+        transition: color .2s;
+    }
+
+    .btn-close-modal:hover {
+        color: var(--text-primary);
+    }
+
+    /* ── Form controls (dark) ──────────────────────────────────────────── */
+    .form-label-dark {
+        font-size: .78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+
+    .form-label-dark i {
+        color: #2dd4bf;
+        font-size: .72rem;
+    }
+
+    .form-control-dark,
+    .form-select-dark {
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 9px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 14px;
+        width: 100%;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .form-select-dark {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: left 12px center;
+        background-size: 14px;
+        padding-left: 36px;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+
+    .form-control-dark::placeholder {
+        color: var(--text-muted);
+    }
+
+    .form-control-dark:focus,
+    .form-select-dark:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    textarea.form-control-dark {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-select-dark option {
+        background: var(--surface-card);
+    }
+
+    /* Required field asterisk */
+    .required-star {
+        color: #f87171;
+        margin-right: 2px;
+    }
+
+    /* ── Group card (table rows with card feel) ───────────────────────── */
+    .group-name-cell {
+        font-size: .9rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .group-desc {
+        font-size: .72rem;
+        color: var(--text-muted);
+        margin-top: 3px;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ── Supervisor chip ───────────────────────────────────────────────── */
+    .sup-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .sup-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1e3a5f, #818cf8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .65rem;
+        font-weight: 700;
+        color: #fff;
+        flex-shrink: 0;
+    }
+
+    .sup-name {
+        font-size: .82rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .sup-role {
+        font-size: .68rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Group ID badge ────────────────────────────────────────────────── */
+    .group-id {
+        font-family: var(--font-mono);
+        font-size: .75rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        color: var(--text-muted);
+    }
+
+    /* ── Member count chip ─────────────────────────────────────────────── */
+    .member-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px;
+        border-radius: 20px;
+        font-size: .72rem;
+        font-weight: 600;
+        background: rgba(45, 212, 191, .08);
+        border: 1px solid rgba(45, 212, 191, .18);
+        color: #2dd4bf;
+    }
+
+    /* ── Action buttons ────────────────────────────────────────────────── */
+    .btn-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 11px;
+        border-radius: 7px;
+        font-size: .75rem;
+        font-weight: 600;
+        border: 1px solid var(--surface-border);
+        background: transparent;
+        cursor: pointer;
+        text-decoration: none;
+        transition: border-color .18s, color .18s, background .18s;
+        white-space: nowrap;
+    }
+
+    .btn-action-edit {
+        color: var(--text-secondary);
+    }
+
+    .btn-action-edit:hover {
+        border-color: #818cf8;
+        color: #a5b4fc;
+        background: rgba(129, 140, 248, .07);
+    }
+
+    .btn-action-del {
+        color: var(--text-secondary);
+    }
+
+    .btn-action-del:hover {
+        border-color: #f87171;
+        color: #f87171;
+        background: rgba(239, 68, 68, .07);
+    }
+
+    /* ── Summary banner ────────────────────────────────────────────────── */
+    .summary-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .summary-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .82rem;
+    }
+
+    .summary-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .summary-val {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .summary-lbl {
+        color: var(--text-muted);
+    }
+
+    /* ── Sort / search ──────────────────────────────────────────────────── */
+    th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th[data-sort]:hover {
+        color: var(--text-primary) !important;
+    }
+
+    th[data-sort] .sort-icon {
+        font-size: .65rem;
+        margin-right: 4px;
+        color: var(--text-muted);
+    }
+
+    th[data-sort].asc .sort-icon,
+    th[data-sort].desc .sort-icon {
+        color: #2dd4bf;
+    }
+
+    tr.row-hidden {
+        display: none;
+    }
+
+    tr.row-match {
+        animation: rowPulse .35s ease;
+    }
+
+    @keyframes rowPulse {
+        0% {
+            background: rgba(45, 212, 191, .07);
+        }
+
+        100% {
+            background: transparent;
+        }
+    }
+
+    /* ── Empty state ────────────────────────────────────────────────────── */
+    .empty-rows td {
+        padding: 52px 20px !important;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        opacity: .35;
+        display: block;
+    }
+
+    /* ── Delete confirm modal ───────────────────────────────────────────── */
+    .modal-delete-body {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 22px;
+    }
+
+    .delete-warn-icon {
+        width: 44px;
+        height: 44px;
+        background: rgba(239, 68, 68, .12);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        color: #f87171;
+        flex-shrink: 0;
+    }
+
+    .delete-warn-text {
+        font-size: .875rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+    }
+
+    .delete-warn-text strong {
+        color: var(--text-primary);
+    }
+
+    @media (max-width: 767px) {
+
+        .col-date,
+        .col-desc {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 575px) {
+        .col-id {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-layer-group me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+            إدارة المجموعات
+        </h1>
+        <p class="page-subtitle">إنشاء وتعديل مجموعات الطلاب وتعيين المشرفين</p>
+    </div>
+
+    {# New Group button → triggers Add modal #}
+    <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        data-bs-toggle="modal" data-bs-target="#addGroupModal" aria-label="إنشاء مجموعة جديدة">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        مجموعة جديدة
+    </button>
+</div>
+
+{# ── Summary banner ──────────────────────────────────────────────────────── #}
+<div class="summary-banner" role="region" aria-label="ملخص المجموعات">
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#2dd4bf;" aria-hidden="true"></span>
+        <span class="summary-val">{{ groups | length }}</span>
+        <span class="summary-lbl">إجمالي المجموعات</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#818cf8;" aria-hidden="true"></span>
+        <span class="summary-val">{{ supervisors | length }}</span>
+        <span class="summary-lbl">مشرف متاح</span>
+    </div>
+    <div class="summary-item">
+        <span class="summary-dot" style="background:#f59e0b;" aria-hidden="true"></span>
+        <span class="summary-val">
+            {{ groups | selectattr('supervisor_id', 'none') | list | length }}
+        </span>
+        <span class="summary-lbl">بدون مشرف</span>
+    </div>
+</div>
+
+{# ════════════════════════════════════════════════════════════════════════════
+MAIN CONTENT CARD
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="content-card" role="region" aria-label="جدول المجموعات">
+
+    {# ── Card header: title + search ─────────────────────────────────────── #}
+    <div class="content-card-header flex-column flex-md-row
+              align-items-start align-items-md-center gap-3">
+        <h2 class="content-card-title mb-0">
+            <i class="fa-solid fa-table-list" aria-hidden="true"></i>
+            قائمة المجموعات
+        </h2>
+
+        <div class="d-flex flex-column flex-sm-row align-items-stretch
+                align-items-sm-center gap-2 ms-auto w-100" style="max-width:420px;">
+            <div class="search-wrap flex-grow-1">
+                <input type="search" id="tableSearch" class="search-input" placeholder="ابحث عن مجموعة أو مشرف…"
+                    autocomplete="off" aria-label="بحث في المجموعات" aria-controls="groupsTable" />
+                <span class="search-icon" aria-hidden="true">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+            </div>
+            <button id="clearSearch" class="btn btn-outline-subtle btn-sm" style="display:none;white-space:nowrap;"
+                type="button" aria-label="مسح البحث">
+                <i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>
+                مسح
+            </button>
+        </div>
+    </div>
+
+    {# ── Table ────────────────────────────────────────────────────────────── #}
+    <div class="table-responsive">
+        <table id="groupsTable" class="table table-dark-custom mb-0" aria-label="جدول المجموعات" aria-live="polite">
+            <thead>
+                <tr>
+                    <th scope="col" class="col-id" style="width:70px;" data-sort="id">
+                        #<i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+                    <th scope="col" data-sort="name">
+                        اسم المجموعة
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+                    <th scope="col" data-sort="supervisor">
+                        المشرف
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+                    <th scope="col" class="text-center" style="width:90px;">الأعضاء</th>
+                    <th scope="col" class="col-date" data-sort="date">
+                        تاريخ الإنشاء
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+                    <th scope="col" class="text-center" style="width:130px;">إجراءات</th>
+                </tr>
+            </thead>
+
+            <tbody id="tableBody">
+                {% for group in groups %}
+                <tr class="group-row" data-id="{{ group.group_id }}" data-name="{{ group.group_name }}"
+                    data-supervisor="{{ group.supervisor.full_name if group.supervisor else '' }}"
+                    data-date="{{ group.created_at.strftime('%Y-%m-%d') }}" aria-label="مجموعة {{ group.group_name }}">
+
+                    {# ID #}
+                    <td class="col-id">
+                        <span class="group-id">{{ group.group_id }}</span>
+                    </td>
+
+                    {# Name + description #}
+                    <td>
+                        <div class="group-name-cell">{{ group.group_name }}</div>
+                        {% if group.description %}
+                        <div class="group-desc col-desc" title="{{ group.description }}">
+                            {{ group.description }}
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    {# Supervisor #}
+                    <td>
+                        {% if group.supervisor %}
+                        <div class="sup-chip">
+                            <div class="sup-avatar" aria-hidden="true">
+                                {{ group.supervisor.fname[0] | upper }}
+                            </div>
+                            <div>
+                                <div class="sup-name">{{ group.supervisor.full_name }}</div>
+                                <div class="sup-role">مشرف</div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <span style="font-size:.78rem;color:var(--text-muted);">
+                            <i class="fa-regular fa-circle-user me-1" aria-hidden="true"></i>
+                            غير معيَّن
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    {# Member count #}
+                    <td class="text-center">
+                        <span class="member-count" aria-label="{{ group.member_count }} عضو">
+                            <i class="fa-solid fa-users" style="font-size:.65rem;" aria-hidden="true"></i>
+                            {{ group.member_count }}
+                        </span>
+                    </td>
+
+                    {# Created at #}
+                    <td class="col-date">
+                        <span style="font-family:var(--font-mono);font-size:.8rem;
+                         color:var(--text-secondary);">
+                            {{ group.created_at.strftime('%Y-%m-%d') }}
+                        </span>
+                    </td>
+
+                    {# Actions #}
+                    <td class="text-center">
+                        <div class="d-flex align-items-center justify-content-center gap-2">
+
+                            {# Edit button → triggers Edit modal #}
+                            <button type="button" class="btn-action btn-action-edit" data-bs-toggle="modal"
+                                data-bs-target="#editGroupModal" data-group-id="{{ group.group_id }}"
+                                data-group-name="{{ group.group_name }}" data-group-desc="{{ group.description or '' }}"
+                                data-supervisor-id="{{ group.supervisor_id or '' }}"
+                                aria-label="تعديل مجموعة {{ group.group_name }}">
+                                <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                تعديل
+                            </button>
+
+                            {# Delete button → triggers Delete confirm modal #}
+                            <button type="button" class="btn-action btn-action-del" data-bs-toggle="modal"
+                                data-bs-target="#deleteGroupModal" data-group-id="{{ group.group_id }}"
+                                data-group-name="{{ group.group_name }}" data-member-count="{{ group.member_count }}"
+                                aria-label="حذف مجموعة {{ group.group_name }}">
+                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                حذف
+                            </button>
+
+                        </div>
+                    </td>
+
+                </tr>
+                {% else %}
+                <tr class="empty-rows">
+                    <td colspan="6">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </span>
+                        لا توجد مجموعات بعد.
+                        <br />
+                        <button type="button" data-bs-toggle="modal" data-bs-target="#addGroupModal" style="color:#2dd4bf;background:none;border:none;
+                           cursor:pointer;font-size:.85rem;margin-top:8px;">
+                            أنشئ أول مجموعة الآن
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <tr id="noResults" style="display:none;" class="empty-rows">
+                    <td colspan="6">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        لا توجد نتائج مطابقة للبحث.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Table footer ─────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center justify-content-between
+              flex-wrap gap-2 pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
+        <span style="font-size:.78rem;color:var(--text-muted);">
+            يُعرض
+            <strong id="visibleCount" style="color:var(--text-secondary);">{{ groups | length }}</strong>
+            من
+            <strong style="color:var(--text-secondary);">{{ groups | length }}</strong>
+            مجموعة
+        </span>
+    </div>
+
+</div>{# /.content-card #}
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL 1 — ADD GROUP
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="addGroupModal" tabindex="-1" aria-labelledby="addGroupModalLabel" aria-modal="true"
+    role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="addGroupModalLabel">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    إنشاء مجموعة جديدة
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="{{ url_for('add_group') }}" id="addGroupForm" novalidate>
+                <div class="modal-body p-4">
+                    <div class="d-flex flex-column gap-4">
+
+                        {# Group Name #}
+                        <div>
+                            <label class="form-label-dark" for="add_group_name">
+                                <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                                اسم المجموعة
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <input type="text" id="add_group_name" name="group_name" class="form-control-dark"
+                                placeholder="مثال: بايثون التأسيسي — الدفعة الثانية" required aria-required="true" />
+                        </div>
+
+                        {# Description #}
+                        <div>
+                            <label class="form-label-dark" for="add_description">
+                                <i class="fa-solid fa-align-right" aria-hidden="true"></i>
+                                الوصف
+                                <span style="font-weight:400;opacity:.6;">(اختياري)</span>
+                            </label>
+                            <textarea id="add_description" name="description" class="form-control-dark" rows="3"
+                                placeholder="وصف مختصر للمسار أو المحتوى…"></textarea>
+                        </div>
+
+                        {# Supervisor dropdown #}
+                        <div>
+                            <label class="form-label-dark" for="add_supervisor_id">
+                                <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+                                المشرف
+                                <span style="font-weight:400;opacity:.6;">(اختياري)</span>
+                            </label>
+                            <select id="add_supervisor_id" name="supervisor_id" class="form-select-dark"
+                                aria-label="اختر المشرف">
+                                <option value="">— بدون مشرف —</option>
+                                {% for sup in supervisors %}
+                                <option value="{{ sup.user_id }}">
+                                    {{ sup.fname }} {{ sup.lname }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">
+                        إلغاء
+                    </button>
+                    <button type="submit" class="btn btn-accent">
+                        <i class="fa-solid fa-check me-1" aria-hidden="true"></i>
+                        إنشاء المجموعة
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL 2 — EDIT GROUP
+(populated dynamically by JS from the edit button's data-* attributes)
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="editGroupModal" tabindex="-1" aria-labelledby="editGroupModalLabel" aria-modal="true"
+    role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="editGroupModalLabel">
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    تعديل المجموعة
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            {# Action URL injected by JS before the modal opens #}
+            <form method="POST" id="editGroupForm" novalidate>
+                <div class="modal-body p-4">
+                    <div class="d-flex flex-column gap-4">
+
+                        <div>
+                            <label class="form-label-dark" for="edit_group_name">
+                                <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                                اسم المجموعة
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <input type="text" id="edit_group_name" name="group_name" class="form-control-dark" required
+                                aria-required="true" />
+                        </div>
+
+                        <div>
+                            <label class="form-label-dark" for="edit_description">
+                                <i class="fa-solid fa-align-right" aria-hidden="true"></i>
+                                الوصف
+                                <span style="font-weight:400;opacity:.6;">(اختياري)</span>
+                            </label>
+                            <textarea id="edit_description" name="description" class="form-control-dark"
+                                rows="3"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="form-label-dark" for="edit_supervisor_id">
+                                <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+                                المشرف
+                                <span style="font-weight:400;opacity:.6;">(اختياري)</span>
+                            </label>
+                            <select id="edit_supervisor_id" name="supervisor_id" class="form-select-dark"
+                                aria-label="اختر المشرف">
+                                <option value="">— بدون مشرف —</option>
+                                {% for sup in supervisors %}
+                                <option value="{{ sup.user_id }}">
+                                    {{ sup.fname }} {{ sup.lname }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">
+                        إلغاء
+                    </button>
+                    <button type="submit" class="btn btn-accent">
+                        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>
+                        حفظ التعديلات
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL 3 — DELETE CONFIRM
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="deleteGroupModal" tabindex="-1" aria-labelledby="deleteGroupModalLabel" aria-modal="true"
+    role="alertdialog">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteGroupModalLabel" style="color:#f87171;">
+                    <i class="fa-solid fa-triangle-exclamation me-1" style="color:#f87171;" aria-hidden="true"></i>
+                    تأكيد الحذف
+                </h5>
+                <button type="button" class="btn-close-modal" data-bs-dismiss="modal" aria-label="إغلاق">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="modal-delete-body">
+                <div class="delete-warn-icon" aria-hidden="true">
+                    <i class="fa-solid fa-trash-can"></i>
+                </div>
+                <div>
+                    <p class="delete-warn-text mb-0">
+                        هل أنت متأكد من حذف مجموعة
+                        <strong id="deleteGroupName">—</strong>؟
+                        <br /><br />
+                        سيتم حذف
+                        <strong id="deleteMemberCount" style="color:#f87171;">—</strong>
+                        سجل عضوية وجميع الشهادات المرتبطة بها بشكل نهائي.
+                    </p>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-subtle" data-bs-dismiss="modal">
+                    إلغاء
+                </button>
+                <form id="deleteGroupForm" method="POST" style="display:inline;">
+                    <button type="submit" class="btn" style="background:rgba(239,68,68,.15);color:#f87171;
+                         border:1px solid rgba(239,68,68,.3);
+                         border-radius:8px;padding:8px 18px;
+                         font-weight:600;font-size:.875rem;">
+                        <i class="fa-solid fa-trash-can me-1" aria-hidden="true"></i>
+                        نعم، احذف
+                    </button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{# Hidden data div for edit_group initialisation (read by JS below) #}
+{% if edit_group is defined and edit_group %}
+<div id="editGroupInitData" hidden data-group-id="{{ edit_group.group_id }}"
+    data-group-name="{{ edit_group.group_name }}" data-description="{{ edit_group.description or '' }}"
+    data-supervisor-id="{{ edit_group.supervisor_id or '' }}"
+    data-action="{{ url_for('edit_group', group_id=edit_group.group_id) }}">
+</div>
+{% endif %}
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* ═══════════════════════════════════════════════════════════════════
+           1. REAL-TIME TABLE SEARCH
+        ═══════════════════════════════════════════════════════════════════ */
+        const searchInput = document.getElementById('tableSearch');
+        const clearBtn = document.getElementById('clearSearch');
+        const tableBody = document.getElementById('tableBody');
+        const noResults = document.getElementById('noResults');
+        const visibleCount = document.getElementById('visibleCount');
+        const allRows = Array.from(tableBody.querySelectorAll('tr.group-row'));
+
+        let sortCol = null, sortDir = 'asc';
+
+        function filterTable() {
+            const raw = searchInput.value.trim().toLowerCase();
+            const terms = raw.split(/\s+/).filter(Boolean);
+            let visible = 0;
+
+            allRows.forEach(function (row) {
+                const haystack = [
+                    row.dataset.id || '',
+                    row.dataset.name || '',
+                    row.dataset.supervisor || '',
+                    row.dataset.date || '',
+                ].join(' ').toLowerCase();
+
+                const match = terms.every(function (t) { return haystack.includes(t); });
+
+                if (match) {
+                    row.classList.remove('row-hidden');
+                    row.classList.add('row-match');
+                    setTimeout(function () { row.classList.remove('row-match'); }, 400);
+                    visible++;
+                } else {
+                    row.classList.add('row-hidden');
+                    row.classList.remove('row-match');
+                }
+            });
+
+            if (visibleCount) visibleCount.textContent = visible;
+            noResults.style.display = (visible === 0 && allRows.length > 0) ? '' : 'none';
+            clearBtn.style.display = raw.length > 0 ? '' : 'none';
+        }
+
+        function debounce(fn, ms) {
+            let t;
+            return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', debounce(filterTable, 160));
+            searchInput.addEventListener('search', filterTable);
+        }
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                searchInput.value = ''; filterTable(); searchInput.focus();
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           2. COLUMN SORT
+        ═══════════════════════════════════════════════════════════════════ */
+        const sortMap = {
+            id: function (r) { return parseInt(r.dataset.id || 0); },
+            name: function (r) { return r.dataset.name || ''; },
+            supervisor: function (r) { return r.dataset.supervisor || ''; },
+            date: function (r) { return r.dataset.date || ''; },
+        };
+
+        document.querySelectorAll('th[data-sort]').forEach(function (th) {
+            th.addEventListener('click', function () {
+                const key = th.dataset.sort;
+                sortDir = (sortCol === key && sortDir === 'asc') ? 'desc' : 'asc';
+                sortCol = key;
+
+                document.querySelectorAll('th[data-sort]').forEach(function (h) {
+                    h.classList.remove('asc', 'desc');
+                    h.removeAttribute('aria-sort');
+                    const ic = h.querySelector('.sort-icon');
+                    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+                });
+                th.classList.add(sortDir);
+                th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+                const ai = th.querySelector('.sort-icon');
+                if (ai) ai.className = sortDir === 'asc'
+                    ? 'fa-solid fa-sort-up sort-icon'
+                    : 'fa-solid fa-sort-down sort-icon';
+
+                const getter = sortMap[key];
+                if (!getter) return;
+                [...allRows].sort(function (a, b) {
+                    const va = getter(a), vb = getter(b);
+                    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                }).forEach(function (r) { tableBody.appendChild(r); });
+                filterTable();
+            });
+        });
+
+        /* ═══════════════════════════════════════════════════════════════════
+           3. EDIT MODAL — pre-fill fields from data-* attributes
+        ═══════════════════════════════════════════════════════════════════ */
+        const editModal = document.getElementById('editGroupModal');
+        if (editModal) {
+            editModal.addEventListener('show.bs.modal', function (event) {
+                const btn = event.relatedTarget;
+                const groupId = btn.dataset.groupId;
+                const groupName = btn.dataset.groupName || '';
+                const groupDesc = btn.dataset.groupDesc || '';
+                const supervisorId = btn.dataset.supervisorId || '';
+
+                // Update form action URL
+                document.getElementById('editGroupForm').action =
+                    '/groups/edit/' + groupId;
+
+                // Fill fields
+                document.getElementById('edit_group_name').value = groupName;
+                document.getElementById('edit_description').value = groupDesc;
+
+                // Set selected option in supervisor dropdown
+                const sel = document.getElementById('edit_supervisor_id');
+                sel.value = supervisorId;       // '' → selects "— بدون مشرف —"
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           4. DELETE MODAL — inject group name + member count + form action
+        ═══════════════════════════════════════════════════════════════════ */
+        const deleteModal = document.getElementById('deleteGroupModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function (event) {
+                const btn = event.relatedTarget;
+                const groupId = btn.dataset.groupId;
+                const groupName = btn.dataset.groupName || '—';
+                const memberCount = btn.dataset.memberCount || '0';
+
+                document.getElementById('deleteGroupName').textContent = groupName;
+                document.getElementById('deleteMemberCount').textContent = memberCount;
+                document.getElementById('deleteGroupForm').action =
+                    '/groups/delete/' + groupId;
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           5. KEYBOARD SHORTCUT  Ctrl/Cmd+F → focus search
+        ═══════════════════════════════════════════════════════════════════ */
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f' &&
+                searchInput && document.activeElement !== searchInput) {
+                e.preventDefault(); searchInput.focus(); searchInput.select();
+            }
+            if (e.key === 'Escape' && searchInput &&
+                document.activeElement === searchInput) {
+                searchInput.value = ''; filterTable();
+            }
+        });
+
+        /* ═══════════════════════════════════════════════════════════════════
+           6. Auto-open edit modal if the route passed edit_group context
+              (GET /groups/edit/<id> fallback — rare but handled)
+        ═══════════════════════════════════════════════════════════════════ */
+        var initData = document.getElementById('editGroupInitData');
+        if (initData) {
+            window.addEventListener('DOMContentLoaded', function () {
+                var modal = new bootstrap.Modal(document.getElementById('editGroupModal'));
+                document.getElementById('editGroupForm').action = initData.dataset.action;
+                document.getElementById('edit_group_name').value = initData.dataset.groupName;
+                document.getElementById('edit_description').value = initData.dataset.description;
+                document.getElementById('edit_supervisor_id').value = initData.dataset.supervisorId;
+                modal.show();
+            });
+        }
+
+    })();
+</script>
+{% endblock %}

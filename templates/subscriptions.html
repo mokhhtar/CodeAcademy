@@ -1,0 +1,1108 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+subscriptions.html — إدارة الاشتراكات
+Extends : base.html
+Route : GET /subscriptions
+Variables: subscriptions (list of (Subscription, User, SubscriptionPlan)),
+status_filter, search_query, status_choices, today
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}إدارة الاشتراكات — أكاديمية شيفرة{% endblock %}
+{% block page_title %}الاشتراكات{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Status badge map ──────────────────────────────────────────────── */
+    .badge-active {
+        background: rgba(16, 185, 129, .13);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, .28);
+    }
+
+    .badge-expired {
+        background: rgba(100, 116, 139, .13);
+        color: #94a3b8;
+        border: 1px solid rgba(100, 116, 139, .28);
+    }
+
+    .badge-suspended {
+        background: rgba(245, 158, 11, .13);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, .28);
+    }
+
+    .badge-canceled {
+        background: rgba(239, 68, 68, .13);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, .28);
+    }
+
+    /* ── Search bar ────────────────────────────────────────────────────── */
+    .search-wrap {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: .85rem;
+        pointer-events: none;
+        transition: color .2s;
+    }
+
+    .search-input {
+        width: 100%;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 40px 10px 16px;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-input:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    .search-input:focus+.search-icon {
+        color: #2dd4bf;
+    }
+
+    /* ── Filter chips ──────────────────────────────────────────────────── */
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: .75rem;
+        font-weight: 600;
+        border: 1px solid var(--surface-border);
+        color: var(--text-secondary);
+        background: var(--surface-card);
+        cursor: pointer;
+        text-decoration: none;
+        transition: all .18s;
+    }
+
+    .filter-chip:hover {
+        border-color: #2dd4bf;
+        color: #2dd4bf;
+    }
+
+    .filter-chip.active-chip {
+        background: rgba(45, 212, 191, .12);
+        border-color: rgba(45, 212, 191, .35);
+        color: #2dd4bf;
+    }
+
+    .filter-chip .chip-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    /* ── Member chip ───────────────────────────────────────────────────── */
+    .member-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .member-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #1e3a5f, #2dd4bf);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .75rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .member-name {
+        font-size: .875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .member-email {
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Plan pill ─────────────────────────────────────────────────────── */
+    .plan-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: .75rem;
+        font-weight: 600;
+        background: rgba(99, 102, 241, .1);
+        color: #a5b4fc;
+        border: 1px solid rgba(99, 102, 241, .2);
+    }
+
+    /* ── Date display ──────────────────────────────────────────────────── */
+    .date-mono {
+        font-family: var(--font-mono);
+        font-size: .8rem;
+        color: var(--text-secondary);
+    }
+
+    .date-mono.near-end {
+        color: #fbbf24;
+    }
+
+    .date-mono.overdue {
+        color: #f87171;
+    }
+
+    /* ── Days-remaining pill ───────────────────────────────────────────── */
+    .days-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: .7rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-top: 3px;
+    }
+
+    .days-left.danger {
+        background: rgba(239, 68, 68, .12);
+        color: #f87171;
+    }
+
+    .days-left.warning {
+        background: rgba(245, 158, 11, .12);
+        color: #fbbf24;
+    }
+
+    .days-left.safe {
+        background: rgba(16, 185, 129, .1);
+        color: #34d399;
+    }
+
+    .days-left.past {
+        background: rgba(100, 116, 139, .1);
+        color: #94a3b8;
+    }
+
+    /* ── Action dropdown ───────────────────────────────────────────────── */
+    .actions-dropdown {
+        background: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        padding: 6px;
+        min-width: 185px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+        display: none;
+        list-style: none;
+    }
+
+    .actions-dropdown.show {
+        display: block !important;
+        z-index: 9999 !important;
+        position: absolute;
+    }
+
+    .actions-dropdown .dd-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 12px;
+        border-radius: 7px;
+        font-size: .82rem;
+        color: var(--text-secondary);
+        border: none;
+        background: none;
+        width: 100%;
+        cursor: pointer;
+        transition: background .15s, color .15s;
+        text-align: right;
+    }
+
+    .actions-dropdown .dd-item:hover {
+        background: var(--surface-sidebar-hover);
+        color: var(--text-primary);
+    }
+
+    .actions-dropdown .dd-item.renew {
+        color: #34d399;
+    }
+
+    .actions-dropdown .dd-item.renew:hover {
+        background: rgba(16, 185, 129, .1);
+    }
+
+    .actions-dropdown .dd-item.suspend:hover {
+        background: rgba(245, 158, 11, .08);
+        color: #fbbf24;
+    }
+
+    .actions-dropdown .dd-item.cancel:hover {
+        background: rgba(239, 68, 68, .08);
+        color: #f87171;
+    }
+
+    .actions-dropdown .dd-divider {
+        border-color: var(--surface-border);
+        margin: 4px 0;
+    }
+
+    .btn-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: .78rem;
+        font-weight: 600;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: border-color .18s, color .18s, background .18s;
+    }
+
+    .btn-actions:hover {
+        border-color: #2dd4bf;
+        color: #2dd4bf;
+        background: rgba(45, 212, 191, .05);
+    }
+
+    /* ── Stats summary bar ─────────────────────────────────────────────── */
+    .stats-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 14px 18px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .stats-bar-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .8rem;
+    }
+
+    .stats-bar-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .stats-bar-val {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .stats-bar-lbl {
+        color: var(--text-muted);
+    }
+
+    /* ── Table sort indicator ──────────────────────────────────────────── */
+    th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th[data-sort]:hover {
+        color: var(--text-primary) !important;
+    }
+
+    th[data-sort] .sort-icon {
+        font-size: .65rem;
+        margin-right: 4px;
+        color: var(--text-muted);
+        transition: color .15s;
+    }
+
+    th[data-sort].asc .sort-icon,
+    th[data-sort].desc .sort-icon {
+        color: #2dd4bf;
+    }
+
+    /* ── Empty state ───────────────────────────────────────────────────── */
+    .empty-rows td {
+        padding: 52px 20px !important;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: .9rem;
+    }
+
+    .empty-rows .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        opacity: .35;
+        display: block;
+    }
+
+    /* ── Row highlight when matching search ────────────────────────────── */
+    tr.row-match {
+        animation: rowPulse .35s ease;
+    }
+
+    @keyframes rowPulse {
+        0% {
+            background: rgba(45, 212, 191, .07);
+        }
+
+        100% {
+            background: transparent;
+        }
+    }
+
+    /* ── Hidden rows (JS filtering) ─────────────────────────────────────── */
+    tr.row-hidden {
+        display: none;
+    }
+
+    /* ── Tooltip for long emails ─────────────────────────────────────────── */
+    .text-truncate-cell {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ── Responsive: hide less-critical cols on small screens ───────────── */
+    /* ── Responsive: Card-based Table on Mobile ─────────────────────────── */
+    @media (max-width: 767.98px) {
+
+        /* Hide the traditional table header */
+        #subscriptionsTable thead {
+            display: none;
+        }
+
+        /* Make each row look like a card */
+        #subscriptionsTable tbody tr {
+            display: block;
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--card-radius);
+            margin-bottom: 15px;
+            padding: 12px;
+            position: relative;
+        }
+
+        /* Hover effect for row/card */
+        #subscriptionsTable tbody tr:hover td {
+            background: transparent;
+            /* Disable the default table hover */
+        }
+
+        /* Make cells block level and format them */
+        #subscriptionsTable tbody td {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: none;
+            padding: 8px 4px;
+            border-bottom: 1px dashed var(--surface-border);
+            text-align: right !important;
+            /* Force right alignment for RTL */
+        }
+
+        /* Remove border from the last cell in the card */
+        #subscriptionsTable tbody td:last-child {
+            border-bottom: none;
+            justify-content: center;
+            /* Center the actions button */
+            padding-top: 12px;
+        }
+
+        /* Inject labels using ::before pseudo-element */
+        #subscriptionsTable tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            flex-shrink: 0;
+            margin-left: 10px;
+            /* Space between label and value */
+        }
+
+        /* Adjust specific cells for card layout */
+        .member-chip {
+            flex-direction: row-reverse;
+            /* Reorder for RTL if needed, or keep as is */
+            justify-content: flex-end;
+        }
+
+        /* Ensure the row number cell looks okay */
+        #subscriptionsTable tbody td:first-child {
+            display: none;
+            /* Often best to just hide the # column on mobile cards */
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-id-card me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+            إدارة الاشتراكات
+        </h1>
+        <p class="page-subtitle">
+            عرض وتعديل جميع اشتراكات الطلاب — تجديد، تعليق، إلغاء
+        </p>
+    </div>
+    <a href="#" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        aria-label="إضافة اشتراك جديد">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        اشتراك جديد
+    </a>
+</div>
+
+
+{# ── Quick-stats summary bar ─────────────────────────────────────────────── #}
+{% set total_shown = subscriptions | length %}
+{% set n_active = subscriptions | selectattr('0.status.value','equalto','Active') | list | length %}
+{% set n_expired = subscriptions | selectattr('0.status.value','equalto','Expired') | list | length %}
+{% set n_suspended = subscriptions | selectattr('0.status.value','equalto','Suspended') | list | length %}
+{% set n_canceled = subscriptions | selectattr('0.status.value','equalto','Canceled') | list | length %}
+
+<div class="stats-bar" role="region" aria-label="ملخص الاشتراكات">
+    <div class="stats-bar-item">
+        <span class="stats-bar-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+        <span class="stats-bar-val">{{ total_shown }}</span>
+        <span class="stats-bar-lbl">إجمالي النتائج</span>
+    </div>
+    <div class="stats-bar-item">
+        <span class="stats-bar-dot" style="background:#34d399;" aria-hidden="true"></span>
+        <span class="stats-bar-val">{{ n_active }}</span>
+        <span class="stats-bar-lbl">نشط</span>
+    </div>
+    <div class="stats-bar-item">
+        <span class="stats-bar-dot" style="background:#f87171;" aria-hidden="true"></span>
+        <span class="stats-bar-val">{{ n_expired }}</span>
+        <span class="stats-bar-lbl">منتهي</span>
+    </div>
+    <div class="stats-bar-item">
+        <span class="stats-bar-dot" style="background:#fbbf24;" aria-hidden="true"></span>
+        <span class="stats-bar-val">{{ n_suspended }}</span>
+        <span class="stats-bar-lbl">معلّق</span>
+    </div>
+    <div class="stats-bar-item">
+        <span class="stats-bar-dot" style="background:#f87171;" aria-hidden="true"></span>
+        <span class="stats-bar-val">{{ n_canceled }}</span>
+        <span class="stats-bar-lbl">ملغى</span>
+    </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MAIN CONTENT CARD
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="content-card" role="region" aria-label="جدول الاشتراكات">
+
+    {# ── Card header: search + filter chips ─────────────────────────────── #}
+    <div class="content-card-header flex-column flex-md-row align-items-start align-items-md-center gap-3">
+
+        {# Left: title #}
+        <h2 class="content-card-title mb-0">
+            <i class="fa-solid fa-table-list" aria-hidden="true"></i>
+            قائمة الاشتراكات
+        </h2>
+
+        {# Right: search + filter row #}
+        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center
+                gap-2 ms-auto w-100" style="max-width:620px;">
+
+            {# Real-time search input #}
+            <div class="search-wrap flex-grow-1">
+                <input type="search" id="tableSearch" class="search-input" placeholder="ابحث عن طالب أو خطة أو تاريخ…"
+                    value="{{ search_query }}" autocomplete="off" aria-label="بحث في الاشتراكات"
+                    aria-controls="subscriptionsTable" />
+                <span class="search-icon" aria-hidden="true">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+            </div>
+
+            {# Clear search button — shown by JS when input has value #}
+            <button id="clearSearch" class="btn btn-outline-subtle btn-sm" style="display:none; white-space:nowrap;"
+                type="button" aria-label="مسح البحث">
+                <i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>
+                مسح
+            </button>
+        </div>
+    </div>
+
+    {# ── Status filter chips (server-side navigation) ────────────────────── #}
+    <div class="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="تصفية حسب الحالة">
+
+        <a href="{{ url_for('subscriptions') }}" class="filter-chip {% if not status_filter %}active-chip{% endif %}"
+            aria-pressed="{{ 'true' if not status_filter else 'false' }}">
+            <span class="chip-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+            الكل
+        </a>
+
+        {% set chip_meta = [
+        ('Active', '#34d399', 'نشط'),
+        ('Expired', '#94a3b8', 'منتهي'),
+        ('Suspended', '#fbbf24', 'معلّق'),
+        ('Canceled', '#f87171', 'ملغى'),
+        ] %}
+        {% for val, color, label in chip_meta %}
+        <a href="{{ url_for('subscriptions', status=val, q=search_query) }}"
+            class="filter-chip {% if status_filter == val %}active-chip{% endif %}"
+            aria-pressed="{{ 'true' if status_filter == val else 'false' }}">
+            <span class="chip-dot" style="background:{{ color }};" aria-hidden="true"></span>
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+
+    {# ── Table ───────────────────────────────────────────────────────────── #}
+    <div class="table-responsive">
+        <table id="subscriptionsTable" class="table table-dark-custom mb-0" aria-label="جدول الاشتراكات"
+            aria-live="polite">
+            <thead>
+                <tr>
+                    <th scope="col" style="width:38px;" aria-hidden="true">#</th>
+
+                    <th scope="col" data-sort="name" aria-sort="none">
+                        العضو
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-plan" data-sort="plan" aria-sort="none">
+                        الخطة
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-start" data-sort="start" aria-sort="none">
+                        بداية
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="end" aria-sort="none">
+                        نهاية الاشتراك
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="status" aria-sort="none">
+                        الحالة
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="text-center" style="width:110px;">
+                        إجراءات
+                    </th>
+                </tr>
+            </thead>
+
+            <tbody id="tableBody">
+                {% for sub, member, plan in subscriptions %}
+
+                {# ── Compute days-remaining ─────────────────────────────────── #}
+                {% set days = (sub.end_date - today).days %}
+
+                {# ── Days pill class ────────────────────────────────────────── #}
+                {% if sub.status.value == 'Active' %}
+                {% if days <= 5 %} {% set days_cls='danger' %} {% elif days <=15 %} {% set days_cls='warning' %} {% else
+                    %} {% set days_cls='safe' %} {% endif %} {% elif sub.status.value=='Expired' %} {% set
+                    days_cls='past' %} {% else %} {% set days_cls='past' %} {% endif %} {# ── Status badge class
+                    ─────────────────────────────────────── #} {% if sub.status.value=='Active' %} {% set
+                    badge_cls='badge-active' %} {% set status_ar='نشط' %} {% set status_icon='fa-circle-check' %} {%
+                    elif sub.status.value=='Expired' %} {% set badge_cls='badge-expired' %} {% set status_ar='منتهي' %}
+                    {% set status_icon='fa-hourglass-end' %} {% elif sub.status.value=='Suspended' %} {% set
+                    badge_cls='badge-suspended' %} {% set status_ar='معلّق' %} {% set status_icon='fa-pause-circle' %}
+                    {% elif sub.status.value=='Canceled' %} {% set badge_cls='badge-canceled' %} {% set status_ar='ملغى'
+                    %} {% set status_icon='fa-circle-xmark' %} {% else %} {% set badge_cls='badge-expired' %} {% set
+                    status_ar=sub.status.value %} {% set status_icon='fa-circle-question' %} {% endif %} <tr
+                    class="subscription-row align-middle" data-name="{{ member.fname }} {{ member.lname }}"
+                    data-email="{{ member.email }}" data-plan="{{ plan.plan_name }}" data-start="{{ sub.start_date }}"
+                    data-end="{{ sub.end_date }}" data-status="{{ sub.status.value }}"
+                    aria-label="اشتراك {{ member.fname }} {{ member.lname }}">
+
+                    {# Row number #}
+                    <td style="color:var(--text-muted);font-size:.78rem;">
+                        {{ loop.index }}
+                    </td>
+
+                    {# Member name + email #}
+                    <td data-label="العضو">
+                        <div class="member-chip">
+                            <div class="member-avatar" aria-hidden="true" title="{{ member.full_name }}">
+                                {{ member.fname[0] | upper }}
+                            </div>
+                            <div>
+                                <div class="member-name">{{ member.fname }} {{ member.lname }}</div>
+                                <div class="member-email text-truncate-cell" title="{{ member.email }}">{{ member.email
+                                    }}</div>
+                            </div>
+                        </div>
+                    </td>
+
+                    {# Plan #}
+                    <td class="col-plan" data-label="الخطة">
+                        <span class="plan-pill">
+                            <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                            {{ plan.plan_name }}
+                        </span>
+                        <div style="font-size:.7rem;color:var(--text-muted);margin-top:4px;">
+                            {{ plan.duration_months }} شهر
+                            &nbsp;·&nbsp;
+                            {{ "{:,.0f}".format(plan.price | float) }} دج
+                        </div>
+                    </td>
+
+                    {# Start date #}
+                    <td class="col-start" data-label="بداية">
+                        <span class="date-mono">{{ sub.start_date.strftime('%Y-%m-%d') }}</span>
+                    </td>
+
+                    {# End date + days remaining #}
+                    <td data-label="نهاية الاشتراك">
+                        <span class="date-mono
+                {% if days_cls == 'danger'  %} near-end
+                {% elif days_cls == 'past'  %} overdue
+                {% endif %}">
+                            {{ sub.end_date.strftime('%Y-%m-%d') }}
+                        </span>
+
+                        {# Show days remaining only for non-canceled #}
+                        {% if sub.status.value != 'Canceled' %}
+                        <div>
+                            <span class="days-left {{ days_cls }}"
+                                aria-label="{% if days >= 0 %}{{ days }} يوم متبقٍّ{% else %}انتهى منذ {{ days | abs }} يوم{% endif %}">
+                                <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                                {% if days > 0 %}
+                                {{ days }} يوم
+                                {% elif days == 0 %}
+                                ينتهي اليوم
+                                {% else %}
+                                منذ {{ days | abs }} يوم
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </td>
+
+                    {# Status badge #}
+                    <td data-label="الحالة">
+                        <span class="badge badge-custom {{ badge_cls }}" aria-label="الحالة: {{ status_ar }}">
+                            <i class="fa-solid {{ status_icon }}"
+                                style="font-size:.55rem;vertical-align:middle;margin-left:5px;" aria-hidden="true"></i>
+                            {{ status_ar }}
+                        </span>
+                    </td>
+
+                    {# ── Actions Dropdown ─────────────────────────────────────── #}
+                    <td class="text-center" data-label="إجراءات">
+                        <div class="dropdown" role="group" aria-label="إجراءات اشتراك {{ member.fname }}">
+
+                            <button class="btn-actions dropdown-toggle" type="button"
+                                id="actionBtn{{ sub.subscription_id }}" data-bs-toggle="dropdown" aria-expanded="false"
+                                aria-haspopup="true">
+                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                                إجراءات
+                            </button>
+
+                            <ul class="dropdown-menu actions-dropdown"
+                                aria-labelledby="actionBtn{{ sub.subscription_id }}" role="menu">
+
+                                {# ── Renew ─────────────────────────────────────────── #}
+                                {% if sub.status.value != 'Canceled' %}
+                                <li role="menuitem">
+                                    <form method="POST"
+                                        action="{{ url_for('renew_subscription', sub_id=sub.subscription_id) }}"
+                                        onsubmit="return confirm('تأكيد تجديد الاشتراك لـ {{ member.fname }} {{ member.lname }}؟')">
+                                        <button type="submit" class="dd-item renew w-100">
+                                            <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                                            تجديد الاشتراك
+                                        </button>
+                                    </form>
+                                </li>
+                                {% endif %}
+
+                                {# ── Activate (show if Suspended or Expired) ───────── #}
+                                {% if sub.status.value in ('Suspended', 'Expired') %}
+                                <li role="menuitem">
+                                    <form method="POST"
+                                        action="{{ url_for('update_subscription_status', sub_id=sub.subscription_id, new_status='Active') }}">
+                                        <button type="submit" class="dd-item w-100">
+                                            <i class="fa-solid fa-circle-check" style="color:#34d399;"
+                                                aria-hidden="true"></i>
+                                            إعادة تفعيل
+                                        </button>
+                                    </form>
+                                </li>
+                                {% endif %}
+
+                                {# ── Suspend (show if Active or Expired) ───────────── #}
+                                {% if sub.status.value in ('Active', 'Expired') %}
+                                <li role="menuitem">
+                                    <form method="POST"
+                                        action="{{ url_for('update_subscription_status', sub_id=sub.subscription_id, new_status='Suspended') }}"
+                                        onsubmit="return confirm('تعليق اشتراك {{ member.fname }} {{ member.lname }}؟')">
+                                        <button type="submit" class="dd-item suspend w-100">
+                                            <i class="fa-solid fa-pause-circle" aria-hidden="true"></i>
+                                            تعليق الاشتراك
+                                        </button>
+                                    </form>
+                                </li>
+                                {% endif %}
+
+                                {# ── Divider before destructive action ─────────────── #}
+                                {% if sub.status.value != 'Canceled' %}
+                                <li role="separator">
+                                    <hr class="dropdown-divider dd-divider" />
+                                </li>
+
+                                <li role="menuitem">
+                                    <form method="POST"
+                                        action="{{ url_for('update_subscription_status', sub_id=sub.subscription_id, new_status='Canceled') }}"
+                                        onsubmit="return confirm('⚠️ إلغاء اشتراك {{ member.fname }} {{ member.lname }} نهائياً؟ لا يمكن التراجع عن هذا الإجراء.')">
+                                        <button type="submit" class="dd-item cancel w-100">
+                                            <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
+                                            إلغاء الاشتراك
+                                        </button>
+                                    </form>
+                                </li>
+                                {% endif %}
+
+                                {# ── Canceled state: show informational note ────────── #}
+                                {% if sub.status.value == 'Canceled' %}
+                                <li>
+                                    <span class="dd-item" style="cursor:default;opacity:.5;pointer-events:none;">
+                                        <i class="fa-solid fa-ban" aria-hidden="true"></i>
+                                        الاشتراك ملغى
+                                    </span>
+                                </li>
+                                {% endif %}
+
+                            </ul>
+                        </div>{# /.dropdown #}
+                    </td>
+
+                    </tr>
+                    {% else %}
+                    {# ── No subscriptions at all ──────────────────────────────── #}
+                    <tr class="empty-rows">
+                        <td colspan="7">
+                            <span class="empty-icon" aria-hidden="true">
+                                <i class="fa-solid fa-folder-open"></i>
+                            </span>
+                            لا توجد اشتراكات مطابقة للبحث أو الفلتر الحالي.
+                            <br />
+                            <a href="{{ url_for('subscriptions') }}"
+                                style="color:#2dd4bf;font-size:.85rem;margin-top:8px;display:inline-block;">
+                                عرض جميع الاشتراكات
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                    {# Empty-state row injected by JS when search yields 0 results #}
+                    <tr id="noResults" style="display:none;" class="empty-rows">
+                        <td colspan="7">
+                            <span class="empty-icon" aria-hidden="true">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </span>
+                            لا توجد نتائج مطابقة للبحث.
+                            <br />
+                            <button onclick="document.getElementById('tableSearch').value='';filterTable();"
+                                style="color:#2dd4bf;background:none;border:none;cursor:pointer;font-size:.85rem;margin-top:8px;">
+                                مسح البحث وعرض الكل
+                            </button>
+                        </td>
+                    </tr>
+            </tbody>
+        </table>
+    </div>{# /.table-responsive #}
+
+    {# ── Table footer ──────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-3 mt-1"
+        style="border-top:1px solid var(--surface-border);">
+        <span id="rowCount" style="font-size:.78rem;color:var(--text-muted);">
+            يُعرض
+            <strong id="visibleCount" style="color:var(--text-secondary);">
+                {{ subscriptions | length }}
+            </strong>
+            من
+            <strong style="color:var(--text-secondary);">{{ subscriptions | length }}</strong>
+            اشتراك
+        </span>
+
+        {# Server-side filter indicator #}
+        {% if status_filter or search_query %}
+        <a href="{{ url_for('subscriptions') }}" class="btn btn-outline-subtle btn-sm" style="font-size:.75rem;"
+            aria-label="إزالة الفلاتر وعرض الكل">
+            <i class="fa-solid fa-filter-circle-xmark me-1" aria-hidden="true"></i>
+            إزالة الفلاتر
+        </a>
+        {% endif %}
+    </div>
+
+</div>{# /.content-card #}
+
+{% endblock %}
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+SCRIPTS — Real-time client-side search + column sort
+════════════════════════════════════════════════════════════════════════════ #}
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* ─────────────────────────────────────────────────────────────────────
+           STATE
+        ───────────────────────────────────────────────────────────────────── */
+        const searchInput = document.getElementById('tableSearch');
+        const clearBtn = document.getElementById('clearSearch');
+        const tableBody = document.getElementById('tableBody');
+        const noResults = document.getElementById('noResults');
+        const visibleCount = document.getElementById('visibleCount');
+        const allRows = Array.from(tableBody.querySelectorAll('tr.subscription-row'));
+
+        let sortCol = null;   // currently sorted column key
+        let sortDir = 'asc';  // 'asc' | 'desc'
+
+
+        /* ─────────────────────────────────────────────────────────────────────
+           1. REAL-TIME CLIENT-SIDE SEARCH / FILTER
+           Searches across: name, email, plan, start-date, end-date, status
+           Highlights matched rows with a brief pulse animation.
+        ───────────────────────────────────────────────────────────────────── */
+
+        function filterTable() {
+            const raw = searchInput.value.trim().toLowerCase();
+            const terms = raw.split(/\s+/).filter(Boolean);   // support multi-word
+
+            let visible = 0;
+
+            allRows.forEach(function (row) {
+                // Build a searchable string from data attributes
+                const haystack = [
+                    row.dataset.name || '',
+                    row.dataset.email || '',
+                    row.dataset.plan || '',
+                    row.dataset.start || '',
+                    row.dataset.end || '',
+                    row.dataset.status || '',
+                ].join(' ').toLowerCase();
+
+                // Every term must be present (AND logic — narrows results)
+                const match = terms.every(function (term) {
+                    return haystack.includes(term);
+                });
+
+                if (match) {
+                    row.classList.remove('row-hidden');
+                    row.classList.add('row-match');
+                    // Remove pulse class after animation completes
+                    setTimeout(function () { row.classList.remove('row-match'); }, 400);
+                    visible++;
+                } else {
+                    row.classList.add('row-hidden');
+                    row.classList.remove('row-match');
+                }
+            });
+
+            // Update footer count
+            if (visibleCount) visibleCount.textContent = visible;
+
+            // Show / hide empty-state row
+            noResults.style.display = (visible === 0 && allRows.length > 0) ? '' : 'none';
+
+            // Show / hide clear button
+            clearBtn.style.display = raw.length > 0 ? '' : 'none';
+        }
+
+
+        /* ─────────────────────────────────────────────────────────────────────
+           2. DEBOUNCE  (avoids filtering on every single keypress)
+        ───────────────────────────────────────────────────────────────────── */
+
+        function debounce(fn, delay) {
+            let timer;
+            return function () {
+                clearTimeout(timer);
+                timer = setTimeout(fn, delay);
+            };
+        }
+
+        const debouncedFilter = debounce(filterTable, 160);
+
+        searchInput.addEventListener('input', debouncedFilter);
+        searchInput.addEventListener('search', filterTable);   // fires on × clear in Chrome
+
+        clearBtn.addEventListener('click', function () {
+            searchInput.value = '';
+            filterTable();
+            searchInput.focus();
+        });
+
+        // Run once on page load in case the field was pre-filled (server search_query)
+        if (searchInput.value) {
+            filterTable();
+        }
+
+
+        /* ─────────────────────────────────────────────────────────────────────
+           3. CLIENT-SIDE COLUMN SORT
+           Clicking a <th data-sort="key"> re-orders visible rows in the DOM.
+           Double-click (or second click) reverses direction.
+        ───────────────────────────────────────────────────────────────────── */
+
+        const sortMap = {
+            name: function (r) { return r.dataset.name || ''; },
+            plan: function (r) { return r.dataset.plan || ''; },
+            start: function (r) { return r.dataset.start || ''; },
+            end: function (r) { return r.dataset.end || ''; },
+            status: function (r) { return r.dataset.status || ''; },
+        };
+
+        document.querySelectorAll('th[data-sort]').forEach(function (th) {
+            th.addEventListener('click', function () {
+                const key = th.dataset.sort;
+
+                if (sortCol === key) {
+                    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortCol = key;
+                    sortDir = 'asc';
+                }
+
+                // Update aria-sort and icon classes
+                document.querySelectorAll('th[data-sort]').forEach(function (h) {
+                    h.classList.remove('asc', 'desc');
+                    h.removeAttribute('aria-sort');
+                    const icon = h.querySelector('.sort-icon');
+                    if (icon) icon.className = 'fa-solid fa-sort sort-icon';
+                });
+
+                th.classList.add(sortDir);
+                th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+                const activeIcon = th.querySelector('.sort-icon');
+                if (activeIcon) {
+                    activeIcon.className = sortDir === 'asc'
+                        ? 'fa-solid fa-sort-up sort-icon'
+                        : 'fa-solid fa-sort-down sort-icon';
+                }
+
+                // Sort all rows (not just visible ones) to preserve filter state
+                const getter = sortMap[key];
+                if (!getter) return;
+
+                const sorted = [...allRows].sort(function (a, b) {
+                    const va = getter(a).toLowerCase();
+                    const vb = getter(b).toLowerCase();
+                    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+
+                // Re-append rows in sorted order (browsers handle DOM reorder efficiently)
+                sorted.forEach(function (row) { tableBody.appendChild(row); });
+
+                // Re-run filter so hidden rows stay hidden after sort
+                filterTable();
+            });
+        });
+
+
+        /* ─────────────────────────────────────────────────────────────────────
+           4. KEYBOARD SHORTCUT  (Ctrl/Cmd + F  →  focus search)
+        ───────────────────────────────────────────────────────────────────── */
+
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                const active = document.activeElement;
+                if (active !== searchInput) {
+                    e.preventDefault();
+                    searchInput.focus();
+                    searchInput.select();
+                }
+            }
+            // Escape clears the search
+            if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = '';
+                filterTable();
+            }
+        });
+
+
+        /* ─────────────────────────────────────────────────────────────────────
+           5. CONFIRM DIALOG ACCESSIBILITY
+           Native confirm() is synchronous and blocks the thread, but it satisfies
+           the university requirement without extra libraries.
+           The onsubmit="return confirm(...)" on each form handles this directly.
+        ───────────────────────────────────────────────────────────────────── */
+
+        /* ─────────────────────────────────────────────────────────────────────
+           6. BULLETPROOF DROPDOWN FALLBACK
+           In case Bootstrap JS fails to initialize Popper or triggers properly,
+           this ensures dropdowns can definitely be opened and closed.
+        ───────────────────────────────────────────────────────────────────── */
+        document.querySelectorAll('.dropdown-toggle').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                // Optional: e.preventDefault(); if it's a link
+                const menu = this.nextElementSibling;
+                if (menu && menu.classList.contains('actions-dropdown')) {
+                    const isShown = menu.classList.contains('show');
+
+                    // Close all other visible dropdowns in the table
+                    document.querySelectorAll('.actions-dropdown.show').forEach(function (m) {
+                        if (m !== menu) m.classList.remove('show');
+                    });
+
+                    // Toggle current
+                    if (isShown) {
+                        menu.classList.remove('show');
+                    } else {
+                        menu.classList.add('show');
+                    }
+                }
+            });
+        });
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.dropdown')) {
+                document.querySelectorAll('.actions-dropdown.show').forEach(function (menu) {
+                    menu.classList.remove('show');
+                });
+            }
+        });
+
+    })();
+</script>
+{% endblock %}

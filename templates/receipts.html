@@ -1,0 +1,676 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+receipts.html — سجل الإيصالات المالية
+Extends : base.html
+Route : GET /receipts (all_receipts)
+Variables: receipts list of (PaymentReceipt, Subscription,
+SubscriptionPlan, User)
+search_query, type_filter, total_revenue, viewer_role
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}سجل الإيصالات — أكاديمية شيفرة{% endblock %}
+{% block page_title %}الإيصالات{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Type badge variants ───────────────────────────────────────────── */
+    .badge-new {
+        background: rgba(16, 185, 129, .13);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, .28);
+    }
+
+    .badge-renewal {
+        background: rgba(45, 212, 191, .13);
+        color: #2dd4bf;
+        border: 1px solid rgba(45, 212, 191, .28);
+    }
+
+    /* ── Search / filter bar ───────────────────────────────────────────── */
+    .search-wrap {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: .85rem;
+        pointer-events: none;
+        transition: color .2s;
+    }
+
+    .search-input {
+        width: 100%;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 40px 10px 16px;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-input:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    /* ── Filter chips ──────────────────────────────────────────────────── */
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: .75rem;
+        font-weight: 600;
+        border: 1px solid var(--surface-border);
+        color: var(--text-secondary);
+        background: var(--surface-card);
+        cursor: pointer;
+        text-decoration: none;
+        transition: all .18s;
+    }
+
+    .filter-chip:hover {
+        border-color: #2dd4bf;
+        color: #2dd4bf;
+    }
+
+    .filter-chip.active-chip {
+        background: rgba(45, 212, 191, .12);
+        border-color: rgba(45, 212, 191, .35);
+        color: #2dd4bf;
+    }
+
+    .filter-chip .chip-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    /* ── Member chip ───────────────────────────────────────────────────── */
+    .member-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .member-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #1e3a5f, #2dd4bf);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .72rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .member-name {
+        font-size: .875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .member-email {
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Amount cell ───────────────────────────────────────────────────── */
+    .amount-val {
+        font-family: var(--font-mono);
+        font-size: .9rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .amount-cur {
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Receipt ID chip ───────────────────────────────────────────────── */
+    .receipt-id {
+        font-family: var(--font-mono);
+        font-size: .78rem;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 6px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        color: var(--text-secondary);
+    }
+
+    /* ── Revenue summary banner ────────────────────────────────────────── */
+    .revenue-banner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .revenue-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .82rem;
+    }
+
+    .revenue-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .revenue-val {
+        font-weight: 700;
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+    }
+
+    .revenue-lbl {
+        color: var(--text-muted);
+    }
+
+    /* ── Empty state ───────────────────────────────────────────────────── */
+    .empty-rows td {
+        padding: 52px 20px !important;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+        opacity: .35;
+        display: block;
+    }
+
+    /* ── Sort header ───────────────────────────────────────────────────── */
+    th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th[data-sort]:hover {
+        color: var(--text-primary) !important;
+    }
+
+    th[data-sort] .sort-icon {
+        font-size: .65rem;
+        margin-right: 4px;
+        color: var(--text-muted);
+    }
+
+    th[data-sort].asc .sort-icon,
+    th[data-sort].desc .sort-icon {
+        color: #2dd4bf;
+    }
+
+    tr.row-hidden {
+        display: none;
+    }
+
+    tr.row-match {
+        animation: rowPulse .35s ease;
+    }
+
+    @keyframes rowPulse {
+        0% {
+            background: rgba(45, 212, 191, .07);
+        }
+
+        100% {
+            background: transparent;
+        }
+    }
+
+    /* ── Print button ──────────────────────────────────────────────────── */
+    .btn-print-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: 7px;
+        font-size: .78rem;
+        font-weight: 600;
+        background: transparent;
+        border: 1px solid var(--surface-border);
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: border-color .18s, color .18s, background .18s;
+        white-space: nowrap;
+    }
+
+    .btn-print-row:hover {
+        border-color: #2dd4bf;
+        color: #2dd4bf;
+        background: rgba(45, 212, 191, .05);
+    }
+
+    @media(max-width:767px) {
+
+        .col-date,
+        .col-plan {
+            display: none !important;
+        }
+    }
+
+    @media(max-width:575px) {
+        .col-sub {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-receipt me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+            سجل الإيصالات المالية
+        </h1>
+        <p class="page-subtitle">جميع عمليات الدفع والتجديد المسجّلة في النظام</p>
+    </div>
+</div>
+
+{# ── Revenue summary banner ──────────────────────────────────────────────── #}
+{% set n_new = receipts | selectattr('0.payment_type.value','equalto','New') | list | length %}
+{% set n_renewal = receipts | selectattr('0.payment_type.value','equalto','Renewal') | list | length %}
+
+<div class="revenue-banner" role="region" aria-label="ملخص الإيصالات">
+    <div class="revenue-item">
+        <span class="revenue-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+        <span class="revenue-val">{{ receipts | length }}</span>
+        <span class="revenue-lbl">إجمالي الإيصالات</span>
+    </div>
+    <div class="revenue-item">
+        <span class="revenue-dot" style="background:#34d399;" aria-hidden="true"></span>
+        <span class="revenue-val">{{ n_new }}</span>
+        <span class="revenue-lbl">جديد</span>
+    </div>
+    <div class="revenue-item">
+        <span class="revenue-dot" style="background:#2dd4bf;" aria-hidden="true"></span>
+        <span class="revenue-val">{{ n_renewal }}</span>
+        <span class="revenue-lbl">تجديد</span>
+    </div>
+    <div class="revenue-item" style="margin-right:auto;">
+        <span class="revenue-dot" style="background:#818cf8;" aria-hidden="true"></span>
+        <span class="revenue-lbl">الإجمالي:</span>
+        <span class="revenue-val" aria-label="إجمالي الإيرادات {{ " {:,.2f}".format(total_revenue) }} دج">
+            {{ "{:,.2f}".format(total_revenue) }}
+            <span style="font-size:.72rem;color:var(--text-muted);"> دج</span>
+        </span>
+    </div>
+</div>
+
+
+{# ════════════════════════════════════════════════════════════════════════════
+MAIN CONTENT CARD
+════════════════════════════════════════════════════════════════════════════ #}
+<div class="content-card" role="region" aria-label="جدول الإيصالات">
+
+    {# ── Card header ──────────────────────────────────────────────────────── #}
+    <div class="content-card-header flex-column flex-md-row
+              align-items-start align-items-md-center gap-3">
+
+        <h2 class="content-card-title mb-0">
+            <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+            قائمة الإيصالات
+        </h2>
+
+        <div class="d-flex flex-column flex-sm-row align-items-stretch
+                align-items-sm-center gap-2 ms-auto w-100" style="max-width:520px;">
+
+            <div class="search-wrap flex-grow-1">
+                <input type="search" id="tableSearch" class="search-input" placeholder="ابحث عن عضو أو خطة…"
+                    value="{{ search_query }}" autocomplete="off" aria-label="بحث في الإيصالات"
+                    aria-controls="receiptsTable" />
+                <span class="search-icon" aria-hidden="true">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+            </div>
+
+            <button id="clearSearch" class="btn btn-outline-subtle btn-sm" style="display:none;white-space:nowrap;"
+                type="button" aria-label="مسح البحث">
+                <i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>
+                مسح
+            </button>
+        </div>
+    </div>
+
+    {# ── Type filter chips ────────────────────────────────────────────────── #}
+    <div class="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="تصفية حسب نوع الدفع">
+        <a href="{{ url_for('all_receipts', q=search_query) }}"
+            class="filter-chip {% if not type_filter %}active-chip{% endif %}">
+            <span class="chip-dot" style="background:#94a3b8;" aria-hidden="true"></span>
+            الكل
+        </a>
+        <a href="{{ url_for('all_receipts', type='New', q=search_query) }}"
+            class="filter-chip {% if type_filter == 'New' %}active-chip{% endif %}">
+            <span class="chip-dot" style="background:#34d399;" aria-hidden="true"></span>
+            اشتراك جديد
+        </a>
+        <a href="{{ url_for('all_receipts', type='Renewal', q=search_query) }}"
+            class="filter-chip {% if type_filter == 'Renewal' %}active-chip{% endif %}">
+            <span class="chip-dot" style="background:#2dd4bf;" aria-hidden="true"></span>
+            تجديد
+        </a>
+    </div>
+
+    {# ── Table ────────────────────────────────────────────────────────────── #}
+    <div class="table-responsive">
+        <table id="receiptsTable" class="table table-dark-custom mb-0" aria-label="جدول الإيصالات المالية"
+            aria-live="polite">
+            <thead>
+                <tr>
+                    <th scope="col" style="width:36px;" aria-hidden="true">#</th>
+
+                    <th scope="col" data-sort="receipt">
+                        رقم الإيصال
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="name">
+                        العضو
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-plan" data-sort="plan">
+                        الخطة
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="col-sub">نوع الدفع</th>
+
+                    <th scope="col" class="col-date" data-sort="date">
+                        التاريخ
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" data-sort="amount">
+                        المبلغ
+                        <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
+                    </th>
+
+                    <th scope="col" class="text-center" style="width:96px;">إجراء</th>
+                </tr>
+            </thead>
+
+            <tbody id="tableBody">
+                {% for receipt, subscription, plan, member in receipts %}
+                <tr class="receipt-row" data-receipt="REC-{{ '%05d' % receipt.receipt_id }}"
+                    data-name="{{ member.fname }} {{ member.lname }}" data-email="{{ member.email }}"
+                    data-plan="{{ plan.plan_name }}" data-type="{{ receipt.payment_type.value }}"
+                    data-date="{{ receipt.payment_date }}" data-amount="{{ receipt.amount_paid }}"
+                    aria-label="إيصال {{ 'REC-%05d' % receipt.receipt_id }}">
+
+                    <td style="color:var(--text-muted);font-size:.78rem;">{{ loop.index }}</td>
+
+                    <td>
+                        <span class="receipt-id" aria-label="رقم الإيصال REC-{{ '%05d' % receipt.receipt_id }}">
+                            REC-{{ "%05d" % receipt.receipt_id }}
+                        </span>
+                    </td>
+
+                    <td>
+                        <div class="member-chip">
+                            <div class="member-avatar" aria-hidden="true" title="{{ member.full_name }}">
+                                {{ member.fname[0] | upper }}
+                            </div>
+                            <div>
+                                <div class="member-name">{{ member.fname }} {{ member.lname }}</div>
+                                <div class="member-email">{{ member.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+
+                    <td class="col-plan">
+                        <span style="font-size:.82rem;font-weight:600;color:var(--text-primary);">
+                            {{ plan.plan_name }}
+                        </span>
+                        <div style="font-size:.7rem;color:var(--text-muted);">
+                            {{ plan.duration_months }} شهر
+                        </div>
+                    </td>
+
+                    <td class="col-sub">
+                        {% if receipt.payment_type.value == 'New' %}
+                        <span class="badge badge-custom badge-new" aria-label="نوع الدفع: اشتراك جديد">
+                            <i class="fa-solid fa-star" style="font-size:.55rem;vertical-align:middle;margin-left:4px;"
+                                aria-hidden="true"></i>
+                            جديد
+                        </span>
+                        {% else %}
+                        <span class="badge badge-custom badge-renewal" aria-label="نوع الدفع: تجديد">
+                            <i class="fa-solid fa-arrows-rotate"
+                                style="font-size:.55rem;vertical-align:middle;margin-left:4px;" aria-hidden="true"></i>
+                            تجديد
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <td class="col-date">
+                        <span class="date-mono" style="font-family:var(--font-mono);font-size:.8rem;
+                         color:var(--text-secondary);">
+                            {{ receipt.payment_date.strftime('%Y-%m-%d') }}
+                        </span>
+                    </td>
+
+                    <td>
+                        <span class="amount-val" aria-label="{{ '{:,.2f}'.format(receipt.amount_paid | float) }} دينار">
+                            {{ "{:,.2f}".format(receipt.amount_paid | float) }}
+                        </span>
+                        <span class="amount-cur"> دج</span>
+                    </td>
+
+                    <td class="text-center">
+                        <a href="{{ url_for('print_receipt', receipt_id=receipt.receipt_id) }}" target="_blank"
+                            rel="noopener" class="btn-print-row"
+                            aria-label="طباعة إيصال {{ 'REC-%05d' % receipt.receipt_id }}">
+                            <i class="fa-solid fa-print" aria-hidden="true"></i>
+                            طباعة
+                        </a>
+                    </td>
+
+                </tr>
+                {% else %}
+                <tr class="empty-rows">
+                    <td colspan="8">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-folder-open"></i>
+                        </span>
+                        لا توجد إيصالات مطابقة للبحث أو الفلتر الحالي.
+                        <br />
+                        <a href="{{ url_for('all_receipts') }}" style="color:#2dd4bf;font-size:.85rem;
+                      margin-top:8px;display:inline-block;">
+                            عرض جميع الإيصالات
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <tr id="noResults" style="display:none;" class="empty-rows">
+                    <td colspan="8">
+                        <span class="empty-icon" aria-hidden="true">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        لا توجد نتائج مطابقة للبحث.
+                        <br />
+                        <button onclick="document.getElementById('tableSearch').value='';filterTable();" style="color:#2dd4bf;background:none;border:none;
+                           cursor:pointer;font-size:.85rem;margin-top:8px;">
+                            مسح البحث وعرض الكل
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Table footer ─────────────────────────────────────────────────────── #}
+    <div class="d-flex align-items-center justify-content-between
+              flex-wrap gap-2 pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
+        <span style="font-size:.78rem;color:var(--text-muted);">
+            يُعرض
+            <strong id="visibleCount" style="color:var(--text-secondary);">{{ receipts | length }}</strong>
+            من
+            <strong style="color:var(--text-secondary);">{{ receipts | length }}</strong>
+            إيصال
+        </span>
+
+        {% if type_filter or search_query %}
+        <a href="{{ url_for('all_receipts') }}" class="btn btn-outline-subtle btn-sm" style="font-size:.75rem;">
+            <i class="fa-solid fa-filter-circle-xmark me-1" aria-hidden="true"></i>
+            إزالة الفلاتر
+        </a>
+        {% endif %}
+    </div>
+
+</div>{# /.content-card #}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        const searchInput = document.getElementById('tableSearch');
+        const clearBtn = document.getElementById('clearSearch');
+        const tableBody = document.getElementById('tableBody');
+        const noResults = document.getElementById('noResults');
+        const visibleCount = document.getElementById('visibleCount');
+        const allRows = Array.from(tableBody.querySelectorAll('tr.receipt-row'));
+
+        let sortCol = null, sortDir = 'asc';
+
+        /* ── 1. Real-time filter ─────────────────────────────────────────── */
+        function filterTable() {
+            const raw = searchInput.value.trim().toLowerCase();
+            const terms = raw.split(/\s+/).filter(Boolean);
+            let visible = 0;
+
+            allRows.forEach(function (row) {
+                const haystack = [
+                    row.dataset.receipt || '',
+                    row.dataset.name || '',
+                    row.dataset.email || '',
+                    row.dataset.plan || '',
+                    row.dataset.type || '',
+                    row.dataset.date || '',
+                    row.dataset.amount || '',
+                ].join(' ').toLowerCase();
+
+                const match = terms.every(function (t) { return haystack.includes(t); });
+
+                if (match) {
+                    row.classList.remove('row-hidden');
+                    row.classList.add('row-match');
+                    setTimeout(function () { row.classList.remove('row-match'); }, 400);
+                    visible++;
+                } else {
+                    row.classList.add('row-hidden');
+                    row.classList.remove('row-match');
+                }
+            });
+
+            if (visibleCount) visibleCount.textContent = visible;
+            noResults.style.display = (visible === 0 && allRows.length > 0) ? '' : 'none';
+            clearBtn.style.display = raw.length > 0 ? '' : 'none';
+        }
+
+        function debounce(fn, ms) {
+            let t;
+            return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+        }
+
+        searchInput.addEventListener('input', debounce(filterTable, 160));
+        searchInput.addEventListener('search', filterTable);
+        clearBtn.addEventListener('click', function () {
+            searchInput.value = ''; filterTable(); searchInput.focus();
+        });
+        if (searchInput.value) filterTable();
+
+        /* ── 2. Column sort ──────────────────────────────────────────────── */
+        const sortMap = {
+            receipt: function (r) { return r.dataset.receipt || ''; },
+            name: function (r) { return r.dataset.name || ''; },
+            plan: function (r) { return r.dataset.plan || ''; },
+            date: function (r) { return r.dataset.date || ''; },
+            amount: function (r) { return parseFloat(r.dataset.amount || 0); },
+        };
+
+        document.querySelectorAll('th[data-sort]').forEach(function (th) {
+            th.addEventListener('click', function () {
+                const key = th.dataset.sort;
+                sortDir = (sortCol === key && sortDir === 'asc') ? 'desc' : 'asc';
+                sortCol = key;
+
+                document.querySelectorAll('th[data-sort]').forEach(function (h) {
+                    h.classList.remove('asc', 'desc');
+                    h.removeAttribute('aria-sort');
+                    const ic = h.querySelector('.sort-icon');
+                    if (ic) ic.className = 'fa-solid fa-sort sort-icon';
+                });
+                th.classList.add(sortDir);
+                th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+                const ai = th.querySelector('.sort-icon');
+                if (ai) ai.className = sortDir === 'asc'
+                    ? 'fa-solid fa-sort-up sort-icon'
+                    : 'fa-solid fa-sort-down sort-icon';
+
+                const getter = sortMap[key];
+                if (!getter) return;
+                [...allRows].sort(function (a, b) {
+                    const va = getter(a), vb = getter(b);
+                    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                }).forEach(function (r) { tableBody.appendChild(r); });
+
+                filterTable();
+            });
+        });
+
+        /* ── 3. Keyboard shortcuts ───────────────────────────────────────── */
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f' &&
+                document.activeElement !== searchInput) {
+                e.preventDefault(); searchInput.focus(); searchInput.select();
+            }
+            if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = ''; filterTable();
+            }
+        });
+    })();
+</script>
+{% endblock %}

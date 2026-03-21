@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>شهادة إتمام — {{ member.fname }} {{ member.lname }} — أكاديمية شيفرة</title>
+
+    {# ── Local assets ────────────────────────────────────────────────── #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.rtl.min.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}" />
+
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════
+       TOKENS
+    ═══════════════════════════════════════════════════════════════════ */
+        :root {
+            --navy: #0c1a35;
+            --navy-mid: #1e3a5f;
+            --navy-light: #2d4a6e;
+            --teal: #0f9488;
+            --teal-lt: #2dd4bf;
+            --teal-xlt: #99f6e4;
+            --gold: #c9a84c;
+            --gold-lt: #f0d07a;
+            --gold-xlt: #fef9ec;
+            --white: #ffffff;
+            --off-white: #f7f9fb;
+            --text-dark: #0c1a35;
+            --text-mid: #334155;
+            --text-muted: #64748b;
+            --font: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+            --mono: 'JetBrains Mono', monospace;
+
+            /* Certificate canvas dimensions for screen */
+            --cert-w: 1060px;
+            --cert-h: 750px;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            width: 100%;
+            min-height: 100%;
+            font-family: var(--font);
+        }
+
+        body {
+            background: #c8d3e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 16px 100px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+       FLOATING ACTION BAR  (.no-print)
+    ═══════════════════════════════════════════════════════════════════ */
+        .action-bar {
+            position: fixed;
+            bottom: 26px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--navy);
+            border-radius: 50px;
+            padding: 9px 18px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .4);
+            z-index: 999;
+            white-space: nowrap;
+        }
+
+        .btn-print {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 22px;
+            background: var(--gold);
+            color: var(--navy);
+            border: none;
+            border-radius: 30px;
+            font-family: var(--font);
+            font-size: .9rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background .2s, transform .15s, box-shadow .2s;
+            text-decoration: none;
+        }
+
+        .btn-print:hover {
+            background: var(--gold-lt);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 18px rgba(201, 168, 76, .5);
+        }
+
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 16px;
+            background: rgba(255, 255, 255, .08);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 30px;
+            font-family: var(--font);
+            font-size: .82rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background .18s;
+        }
+
+        .btn-back:hover {
+            background: rgba(255, 255, 255, .15);
+            color: #fff;
+        }
+
+        .bar-sep {
+            width: 1px;
+            height: 26px;
+            background: rgba(255, 255, 255, .12);
+        }
+
+        .bar-info {
+            font-size: .72rem;
+            color: #94a3b8;
+            padding: 0 4px;
+            font-family: var(--mono);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+       CERTIFICATE CANVAS
+    ═══════════════════════════════════════════════════════════════════ */
+        .cert-canvas {
+            width: var(--cert-w);
+            height: var(--cert-h);
+            background: var(--white);
+            position: relative;
+            overflow: hidden;
+            box-shadow:
+                0 0 0 1px rgba(0, 0, 0, .08),
+                0 24px 64px rgba(0, 0, 0, .28),
+                0 4px 12px rgba(0, 0, 0, .12);
+        }
+
+        /* ── Dark navy left panel (1/3 width) ───────────────────────────── */
+        .cert-panel-left {
+            position: absolute;
+            top: 0;
+            right: 0;
+            /* RTL: right side */
+            width: 310px;
+            height: 100%;
+            background: var(--navy);
+            overflow: hidden;
+        }
+
+        /* Geometric triangle clip inside left panel */
+        .cert-panel-left::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -70px;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: var(--cert-h) 70px 0 0;
+            border-color: var(--white) transparent transparent transparent;
+        }
+
+        /* ── Teal accent bar (vertical, inside left panel) ──────────────── */
+        .cert-accent-bar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--gold) 0%, var(--teal) 60%, var(--navy-mid) 100%);
+        }
+
+        /* ── Decorative circles in left panel ───────────────────────────── */
+        .deco-circle {
+            position: absolute;
+            border-radius: 50%;
+            opacity: .07;
+        }
+
+        .deco-c1 {
+            width: 260px;
+            height: 260px;
+            background: var(--teal-lt);
+            top: -60px;
+            right: -60px;
+        }
+
+        .deco-c2 {
+            width: 180px;
+            height: 180px;
+            background: var(--gold-lt);
+            bottom: -40px;
+            right: -30px;
+        }
+
+        .deco-c3 {
+            width: 100px;
+            height: 100px;
+            background: var(--teal-lt);
+            top: 50%;
+            right: 60px;
+            transform: translateY(-50%);
+        }
+
+        /* ── Left panel content ─────────────────────────────────────────── */
+        .panel-content {
+            position: absolute;
+            inset: 0;
+            right: 6px;
+            /* offset accent bar */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 28px 28px 50px;
+            z-index: 2;
+        }
+
+        /* Academy logo mark */
+        .cert-logo-ring {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            border: 3px solid rgba(201, 168, 76, .4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            background: rgba(255, 255, 255, .05);
+            position: relative;
+        }
+
+        .cert-logo-ring::before {
+            content: '';
+            position: absolute;
+            inset: 6px;
+            border-radius: 50%;
+            border: 1px solid rgba(201, 168, 76, .2);
+        }
+
+        .cert-logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--gold), var(--teal));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            color: var(--navy);
+            font-weight: 800;
+        }
+
+        .panel-academy-ar {
+            font-size: .95rem;
+            font-weight: 800;
+            color: var(--white);
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        .panel-academy-en {
+            font-size: .62rem;
+            color: var(--teal-lt);
+            font-family: var(--mono);
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            margin-top: 3px;
+            text-align: center;
+        }
+
+        /* Divider in left panel */
+        .panel-divider {
+            width: 50px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--gold), transparent);
+            margin: 18px auto;
+        }
+
+        /* QR-like cert code block */
+        .cert-code-block {
+            text-align: center;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 8px;
+            width: 100%;
+        }
+
+        .cert-code-label {
+            font-size: .58rem;
+            color: #64748b;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .cert-code-value {
+            font-family: var(--mono);
+            font-size: .68rem;
+            color: var(--teal-lt);
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        /* Issue date in left panel */
+        .panel-date-label {
+            font-size: .6rem;
+            color: #64748b;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            display: block;
+            text-align: center;
+            margin-top: 14px;
+        }
+
+        .panel-date-value {
+            font-family: var(--mono);
+            font-size: .8rem;
+            color: var(--gold-lt);
+            text-align: center;
+            display: block;
+            margin-top: 3px;
+        }
+
+        /* ── Main content area (right 2/3) ──────────────────────────────── */
+        .cert-main {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: calc(100% - 310px);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 44px 52px 36px 40px;
+        }
+
+        /* ── Decorative corner ornaments ────────────────────────────────── */
+        .corner {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            opacity: .18;
+        }
+
+        .corner-tl {
+            top: 14px;
+            left: 14px;
+            border-top: 3px solid var(--gold);
+            border-left: 3px solid var(--gold);
+        }
+
+        .corner-bl {
+            bottom: 14px;
+            left: 14px;
+            border-bottom: 3px solid var(--gold);
+            border-left: 3px solid var(--gold);
+        }
+
+        /* ── Top label ──────────────────────────────────────────────────── */
+        .cert-eyebrow {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .eyebrow-line {
+            height: 1.5px;
+            flex: 1;
+            background: linear-gradient(90deg, var(--gold), transparent);
+        }
+
+        .eyebrow-text {
+            font-size: .7rem;
+            font-weight: 700;
+            color: var(--gold);
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        /* ── Main title ─────────────────────────────────────────────────── */
+        .cert-title {
+            font-size: 2.8rem;
+            font-weight: 900;
+            color: var(--navy);
+            line-height: 1.05;
+            margin-bottom: 6px;
+            letter-spacing: -.01em;
+        }
+
+        .cert-title-sub {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 26px;
+            letter-spacing: .03em;
+        }
+
+        /* ── Body text ──────────────────────────────────────────────────── */
+        .cert-intro {
+            font-size: .92rem;
+            color: var(--text-mid);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        /* Member name highlight */
+        .cert-member-name {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--navy);
+            position: relative;
+            display: inline-block;
+            margin-bottom: 12px;
+            line-height: 1.15;
+        }
+
+        .cert-member-name::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            right: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold), var(--teal-lt));
+            border-radius: 2px;
+        }
+
+        .cert-course-intro {
+            font-size: .88rem;
+            color: var(--text-muted);
+            margin-top: 16px;
+            margin-bottom: 5px;
+        }
+
+        /* Course name */
+        .cert-course-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--teal);
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .cert-course-name i {
+            font-size: .9rem;
+            opacity: .7;
+        }
+
+        /* ── Bottom row: issuer + stamp ─────────────────────────────────── */
+        .cert-bottom {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px dashed rgba(100, 116, 139, .25);
+        }
+
+        .issuer-block {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .issuer-label {
+            font-size: .62rem;
+            color: var(--text-muted);
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+
+        .issuer-sig-line {
+            width: 140px;
+            height: 1px;
+            background: linear-gradient(90deg, var(--navy-light), transparent);
+            margin: 6px 0;
+        }
+
+        .issuer-name {
+            font-size: .88rem;
+            font-weight: 700;
+            color: var(--navy);
+        }
+
+        .issuer-role {
+            font-size: .72rem;
+            color: var(--text-muted);
+        }
+
+        /* Stamp */
+        .cert-stamp {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .stamp-ring {
+            width: 78px;
+            height: 78px;
+            border-radius: 50%;
+            border: 3px solid var(--gold);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            opacity: .85;
+        }
+
+        .stamp-ring::before {
+            content: '';
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            border: 1.5px dashed rgba(201, 168, 76, .5);
+        }
+
+        .stamp-inner {
+            text-align: center;
+        }
+
+        .stamp-check {
+            font-size: 1.4rem;
+            color: var(--gold);
+            display: block;
+            line-height: 1;
+        }
+
+        .stamp-word {
+            font-size: .5rem;
+            font-weight: 800;
+            color: var(--gold);
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .stamp-date {
+            font-size: .6rem;
+            font-family: var(--mono);
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+       PRINT STYLES
+    ═══════════════════════════════════════════════════════════════════ */
+        @media print {
+
+            /* Hide everything that must not be printed */
+            .no-print {
+                display: none !important;
+            }
+
+            /* Reset page chrome */
+            html,
+            body {
+                background: var(--white) !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            /* Canvas fills the entire printed page */
+            .cert-canvas {
+                width: 100% !important;
+                height: 100vh !important;
+                box-shadow: none !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            /* Force-preserve all background colours, gradients, borders */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* Landscape A4 */
+            @page {
+                size: A4 landscape;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    {# ════════════════════════════════════════════════════════════════════
+    FLOATING ACTION BAR (hidden on print)
+    ════════════════════════════════════════════════════════════════════ #}
+    <div class="action-bar no-print" role="toolbar" aria-label="إجراءات الشهادة">
+
+        <a href="{{ url_for('certificates') }}" class="btn-back" aria-label="العودة إلى قائمة الشهادات">
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            الشهادات
+        </a>
+
+        <div class="bar-sep" aria-hidden="true"></div>
+
+        <span class="bar-info" aria-hidden="true">
+            {{ certificate.certificate_code | truncate(22, True, '…') }}
+        </span>
+
+        <div class="bar-sep" aria-hidden="true"></div>
+
+        <button class="btn-print" onclick="window.print()" type="button" aria-label="طباعة الشهادة">
+            <i class="fa-solid fa-certificate" aria-hidden="true"></i>
+            طباعة الشهادة
+        </button>
+
+    </div>
+
+
+    {# ════════════════════════════════════════════════════════════════════
+    CERTIFICATE CANVAS
+    ════════════════════════════════════════════════════════════════════ #}
+    <article class="cert-canvas" role="document" aria-label="شهادة إتمام مسار — {{ member.fname }} {{ member.lname }}">
+
+        {# ── Left dark panel ─────────────────────────────────────────── #}
+        <aside class="cert-panel-left" aria-hidden="true">
+            <div class="cert-accent-bar"></div>
+            <div class="deco-circle deco-c1"></div>
+            <div class="deco-circle deco-c2"></div>
+            <div class="deco-circle deco-c3"></div>
+
+            <div class="panel-content">
+                {# Logo mark #}
+                <div class="cert-logo-ring">
+                    <div class="cert-logo-icon">
+                        <i class="fa-solid fa-code"></i>
+                    </div>
+                </div>
+
+                <div class="panel-academy-ar">أكاديمية شيفرة</div>
+                <div class="panel-academy-en">Shyfra Academy</div>
+
+                <div class="panel-divider"></div>
+
+                {# Certificate code #}
+                <div class="cert-code-block">
+                    <span class="cert-code-label">رمز التحقق</span>
+                    <span class="cert-code-value">
+                        {{ certificate.certificate_code }}
+                    </span>
+                </div>
+
+                {# Issue date #}
+                <span class="panel-date-label">تاريخ الإصدار</span>
+                <span class="panel-date-value">
+                    {{ certificate.issue_date.strftime('%Y / %m / %d') }}
+                </span>
+            </div>
+        </aside>
+
+
+        {# ── Main content ────────────────────────────────────────────── #}
+        <main class="cert-main">
+
+            {# Corner ornaments #}
+            <div class="corner corner-tl" aria-hidden="true"></div>
+            <div class="corner corner-bl" aria-hidden="true"></div>
+
+            {# Eyebrow #}
+            <div class="cert-eyebrow" aria-hidden="true">
+                <div class="eyebrow-line"></div>
+                <span class="eyebrow-text">Certificate of Completion</span>
+                <div class="eyebrow-line" style="background:linear-gradient(90deg,transparent,var(--gold));"></div>
+            </div>
+
+            {# Main title #}
+            <h1 class="cert-title">شهادة إتمام</h1>
+            <p class="cert-title-sub">مسار تدريبي في البرمجة وتطوير التطبيقات</p>
+
+            {# Intro line #}
+            <p class="cert-intro">تشهد أكاديمية شيفرة بأن المتدرب/ة:</p>
+
+            {# Member name #}
+            <div class="cert-member-name" aria-label="اسم المتدرب: {{ member.fname }} {{ member.lname }}">
+                {{ member.fname }} {{ member.lname }}
+            </div>
+
+            {# Course intro #}
+            <p class="cert-course-intro">
+                قد أتم/ت بنجاح المسار التدريبي:
+            </p>
+
+            {# Course name #}
+            <div class="cert-course-name" aria-label="اسم المسار: {{ group.group_name }}">
+                <i class="fa-solid fa-laptop-code" aria-hidden="true"></i>
+                {{ group.group_name }}
+            </div>
+
+            {# ── Bottom row ──────────────────────────────────────────────── #}
+            <div class="cert-bottom">
+
+                {# Issuer signature block #}
+                <div class="issuer-block" aria-label="معلومات المشرف المُصدر">
+                    <span class="issuer-label">توقيع المشرف / المدرّب</span>
+                    <div class="issuer-sig-line" aria-hidden="true"></div>
+                    <span class="issuer-name">
+                        {% if issuer %}
+                        {{ issuer.fname }} {{ issuer.lname }}
+                        {% else %}
+                        أكاديمية شيفرة
+                        {% endif %}
+                    </span>
+                    <span class="issuer-role">
+                        {% if issuer %}
+                        مشرف المسار التدريبي
+                        {% else %}
+                        الإدارة العامة
+                        {% endif %}
+                    </span>
+                </div>
+
+                {# Completion stamp #}
+                <div class="cert-stamp" aria-label="ختم الإتمام">
+                    <div class="stamp-ring">
+                        <div class="stamp-inner">
+                            <i class="fa-solid fa-check stamp-check" aria-hidden="true"></i>
+                            <span class="stamp-word">أُتمّ</span>
+                        </div>
+                    </div>
+                    <span class="stamp-date">
+                        {{ certificate.issue_date.strftime('%Y-%m-%d') }}
+                    </span>
+                </div>
+
+            </div>
+        </main>
+
+    </article>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+
+    <script>
+        (function () {
+            'use strict';
+            /* Auto-print if URL contains ?autoprint=1 */
+            if (new URLSearchParams(window.location.search).get('autoprint') === '1') {
+                window.addEventListener('load', function () {
+                    setTimeout(window.print, 700);
+                });
+            }
+        })();
+    </script>
+
+</body>
+
+</html>

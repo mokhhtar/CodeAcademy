@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}أكاديمية شيفرة{% endblock %}</title>
+
+    {# ─── Local Fonts (offline) ──────────────────────────────────────────── #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}" />
+
+    {# ─── Bootstrap 5 RTL (local) ────────────────────────────────────────── #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.rtl.min.css') }}" />
+
+    {# ─── FontAwesome 6 (local) ───────────────────────────────────────────── #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}" />
+
+    {# ─── Page-specific head additions ───────────────────────────────────── #}
+    {% block head_extra %}{% endblock %}
+
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════════
+       DESIGN SYSTEM  —  CSS Custom Properties
+    ═══════════════════════════════════════════════════════════════════════ */
+        :root {
+            /* Brand palette */
+            --brand-primary: #1e3a5f;
+            /* deep navy  */
+            --brand-accent: #2dd4bf;
+            /* teal glow  */
+            --brand-accent-dark: #0f9488;
+            --brand-accent-light: #ccfbf1;
+            --brand-danger: #ef4444;
+            --brand-warning: #f59e0b;
+            --brand-success: #10b981;
+
+            /* Surface colours */
+            --surface-bg: #0f172a;
+            /* main dark background  */
+            --surface-sidebar: #0f1f38;
+            /* sidebar               */
+            --surface-sidebar-hover: #1e3a5f;
+            --surface-card: #1e293b;
+            /* card / panel          */
+            --surface-card-hover: #263447;
+            --surface-input: #1e293b;
+            --surface-border: #2d4263;
+
+            /* Text */
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --text-accent: #2dd4bf;
+
+            /* Layout */
+            --sidebar-width: 260px;
+            --sidebar-collapsed-w: 72px;
+            --navbar-height: 64px;
+            --sidebar-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --card-radius: 12px;
+            --btn-radius: 8px;
+
+            /* Typography */
+            --font-arabic: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       BASE RESET & BODY
+    ═══════════════════════════════════════════════════════════════════════ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-arabic);
+            background-color: var(--surface-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.7;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       SCROLLBAR
+    ═══════════════════════════════════════════════════════════════════════ */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--surface-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--surface-border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--brand-accent);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════════════════════════════════════════════ */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            /* RTL: sidebar is on the right */
+            height: 100vh;
+            width: var(--sidebar-width);
+            background: var(--surface-sidebar);
+            border-left: 1px solid var(--surface-border);
+            display: flex;
+            flex-direction: column;
+            transition: width var(--sidebar-transition), transform var(--sidebar-transition);
+            z-index: 1040;
+            overflow: hidden;
+        }
+
+        /* Collapsed state (toggled via JS) */
+        #sidebar.collapsed {
+            width: var(--sidebar-collapsed-w);
+        }
+
+        /* On mobile: slide off-screen to the right */
+        @media (max-width: 991.98px) {
+            #sidebar {
+                transform: translateX(100%);
+                width: var(--sidebar-width) !important;
+                box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+            }
+
+            #sidebar.mobile-open {
+                transform: translateX(0);
+            }
+        }
+
+        /* ── Brand / Logo Area ─────────────────────────────────────────── */
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 20px 18px;
+            min-height: var(--navbar-height);
+            border-bottom: 1px solid var(--surface-border);
+            text-decoration: none;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .sidebar-brand-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--brand-accent), var(--brand-accent-dark));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: var(--surface-bg);
+            flex-shrink: 0;
+            box-shadow: 0 0 20px rgba(45, 212, 191, 0.35);
+        }
+
+        .sidebar-brand-text {
+            display: flex;
+            flex-direction: column;
+            transition: opacity var(--sidebar-transition), width var(--sidebar-transition);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .sidebar-brand-text .brand-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+        }
+
+        .sidebar-brand-text .brand-sub {
+            font-size: 0.68rem;
+            font-weight: 400;
+            color: var(--text-accent);
+            font-family: var(--font-mono);
+            letter-spacing: 0.08em;
+        }
+
+        #sidebar.collapsed .sidebar-brand-text {
+            opacity: 0;
+            width: 0;
+        }
+
+        /* ── Nav Section Labels ─────────────────────────────────────────── */
+        .nav-section-label {
+            padding: 18px 18px 6px;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            transition: opacity var(--sidebar-transition);
+        }
+
+        #sidebar.collapsed .nav-section-label {
+            opacity: 0;
+        }
+
+        /* ── Nav Items ──────────────────────────────────────────────────── */
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px 10px;
+        }
+
+        .nav-item-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            color: var(--text-secondary) !important;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            transition: background 0.2s, color 0.2s, padding 0.2s;
+            margin-bottom: 2px;
+            position: relative;
+        }
+
+        .nav-item-link:visited {
+            color: var(--text-secondary) !important;
+        }
+
+        .nav-item-link .nav-icon {
+            width: 22px;
+            min-width: 22px;
+            font-size: 1rem;
+            text-align: center;
+            color: var(--text-muted);
+            transition: color 0.2s;
+        }
+
+        .nav-item-link .nav-label {
+            transition: opacity var(--sidebar-transition), width var(--sidebar-transition);
+            overflow: hidden;
+        }
+
+        .nav-item-link:hover {
+            background: var(--surface-sidebar-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-item-link:hover .nav-icon {
+            color: var(--brand-accent);
+        }
+
+        .nav-item-link.active {
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.15), rgba(45, 212, 191, 0.05));
+            color: var(--text-accent);
+            border: 1px solid rgba(45, 212, 191, 0.2);
+        }
+
+        .nav-item-link.active .nav-icon {
+            color: var(--brand-accent);
+        }
+
+        /* Active left-border indicator (RTL: use right border) */
+        .nav-item-link.active::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 20%;
+            height: 60%;
+            width: 3px;
+            background: var(--brand-accent);
+            border-radius: 2px 0 0 2px;
+        }
+
+        /* Badge on nav item */
+        .nav-badge {
+            margin-right: auto;
+            /* pushes badge to the left in RTL */
+            font-size: 0.65rem;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: rgba(45, 212, 191, 0.15);
+            color: var(--brand-accent);
+            font-weight: 600;
+            transition: opacity var(--sidebar-transition);
+        }
+
+        #sidebar.collapsed .nav-label,
+        #sidebar.collapsed .nav-badge {
+            opacity: 0;
+            width: 0;
+        }
+
+        #sidebar.collapsed .nav-item-link {
+            justify-content: center;
+            padding: 10px;
+            gap: 0;
+        }
+
+        #sidebar.collapsed .nav-item-link .nav-icon {
+            width: auto;
+            font-size: 1.1rem;
+        }
+
+        /* ── Sidebar Footer ─────────────────────────────────────────────── */
+        .sidebar-footer {
+            padding: 12px 10px;
+            border-top: 1px solid var(--surface-border);
+            flex-shrink: 0;
+        }
+
+        .sidebar-user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+            overflow: hidden;
+        }
+
+        .sidebar-user:hover {
+            background: var(--surface-sidebar-hover);
+        }
+
+        .sidebar-avatar {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .sidebar-user-info {
+            overflow: hidden;
+            transition: opacity var(--sidebar-transition);
+        }
+
+        .sidebar-user-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .sidebar-user-role {
+            font-size: 0.68rem;
+            color: var(--text-accent);
+            white-space: nowrap;
+        }
+
+        #sidebar.collapsed .sidebar-user-info {
+            opacity: 0;
+            width: 0;
+        }
+
+        #sidebar.collapsed .sidebar-user {
+            justify-content: center;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       TOP NAVBAR
+    ═══════════════════════════════════════════════════════════════════════ */
+        #topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--navbar-height);
+            background: rgba(15, 26, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+            z-index: 1030;
+            transition: padding-right var(--sidebar-transition);
+        }
+
+        /* Offset topbar by sidebar width */
+        body:not(.sidebar-collapsed) #topbar {
+            padding-right: calc(var(--sidebar-width) + 24px);
+        }
+
+        body.sidebar-collapsed #topbar {
+            padding-right: calc(var(--sidebar-collapsed-w) + 24px);
+        }
+
+        @media (max-width: 991.98px) {
+            #topbar {
+                padding-right: 24px !important;
+            }
+        }
+
+        /* ── Toggle Button ──────────────────────────────────────────────── */
+        .sidebar-toggle-btn {
+            width: 38px;
+            height: 38px;
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle-btn:hover {
+            background: var(--surface-sidebar-hover);
+            color: var(--brand-accent);
+            border-color: var(--brand-accent);
+        }
+
+        /* ── Page Title in Topbar ───────────────────────────────────────── */
+        .topbar-page-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .topbar-page-title .breadcrumb-sep {
+            color: var(--text-muted);
+            margin: 0 6px;
+        }
+
+        .topbar-page-title .page-name {
+            color: var(--text-accent);
+        }
+
+        /* ── Topbar Actions ─────────────────────────────────────────────── */
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .topbar-icon-btn {
+            width: 38px;
+            height: 38px;
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background 0.2s, color 0.2s;
+            position: relative;
+            text-decoration: none;
+        }
+
+        .topbar-icon-btn:hover {
+            background: var(--surface-card-hover);
+            color: var(--brand-accent);
+        }
+
+        /* Notification dot */
+        .topbar-icon-btn .notif-dot {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 8px;
+            height: 8px;
+            background: var(--brand-danger);
+            border-radius: 50%;
+            border: 2px solid var(--surface-bg);
+        }
+
+        /* ── Profile Dropdown ───────────────────────────────────────────── */
+        .profile-dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 12px 5px 5px;
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: 24px;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            text-decoration: none;
+        }
+
+        .profile-dropdown-toggle:hover {
+            border-color: var(--brand-accent);
+            background: var(--surface-card-hover);
+        }
+
+        .profile-avatar {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .profile-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .profile-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .profile-role {
+            font-size: 0.65rem;
+            color: var(--text-accent);
+        }
+
+        @media (max-width: 575.98px) {
+            .profile-info {
+                display: none;
+            }
+        }
+
+        /* Fallback container relative positioning if Bootstrap CSS is blocked */
+        .dropdown {
+            position: relative;
+        }
+
+        /* Bootstrap dropdown overrides for dark theme */
+        .dropdown-menu-dark-custom {
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--card-radius);
+            padding: 8px;
+            min-width: 200px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+            display: none;
+            position: absolute;
+            z-index: 9999;
+            list-style: none;
+        }
+
+        .dropdown-menu-dark-custom.show {
+            display: block !important;
+            position: absolute !important;
+            top: calc(100% + 10px) !important;
+            left: 0 !important;
+            z-index: 9999 !important;
+        }
+
+        .dropdown-menu-dark-custom .dropdown-item {
+            color: var(--text-secondary);
+            border-radius: 8px;
+            padding: 9px 14px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .dropdown-menu-dark-custom .dropdown-item:hover {
+            background: var(--surface-sidebar-hover);
+            color: var(--text-primary);
+        }
+
+        .dropdown-menu-dark-custom .dropdown-item.text-danger:hover {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--brand-danger);
+        }
+
+        .dropdown-menu-dark-custom .dropdown-divider {
+            border-color: var(--surface-border);
+            margin: 6px 0;
+        }
+
+        .dropdown-menu-dark-custom .dropdown-header {
+            color: var(--text-muted);
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 6px 14px 4px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT WRAPPER
+    ═══════════════════════════════════════════════════════════════════════ */
+        #main-wrapper {
+            margin-top: var(--navbar-height);
+            padding: 28px 24px;
+            transition: margin-right var(--sidebar-transition);
+            min-height: calc(100vh - var(--navbar-height));
+        }
+
+        body:not(.sidebar-collapsed) #main-wrapper {
+            margin-right: var(--sidebar-width);
+        }
+
+        body.sidebar-collapsed #main-wrapper {
+            margin-right: var(--sidebar-collapsed-w);
+        }
+
+        @media (max-width: 991.98px) {
+            #main-wrapper {
+                margin-right: 0 !important;
+                padding: 20px 16px;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE OVERLAY (backdrop when sidebar is open)
+    ═══════════════════════════════════════════════════════════════════════ */
+        #sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(2px);
+            z-index: 1039;
+        }
+
+        #sidebar-overlay.show {
+            display: block;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       FLASH MESSAGES
+    ═══════════════════════════════════════════════════════════════════════ */
+        .flash-container {
+            position: fixed;
+            top: calc(var(--navbar-height) + 16px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            width: min(480px, calc(100vw - 32px));
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .flash-alert {
+            border-radius: var(--card-radius);
+            padding: 14px 18px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            border: 1px solid transparent;
+            animation: slideDown 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .flash-alert.alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        .flash-alert.alert-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .flash-alert.alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: #fde68a;
+        }
+
+        .flash-alert.alert-info {
+            background: rgba(45, 212, 191, 0.15);
+            border-color: rgba(45, 212, 191, 0.3);
+            color: var(--brand-accent);
+        }
+
+        .flash-alert .flash-icon {
+            font-size: 1rem;
+            margin-top: 1px;
+            flex-shrink: 0;
+        }
+
+        .flash-alert .flash-body {
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .flash-alert .btn-close {
+            filter: brightness(0) invert(1);
+            opacity: 0.5;
+            font-size: 0.65rem;
+            margin-top: 2px;
+        }
+
+        .flash-alert .btn-close:hover {
+            opacity: 1;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+       SHARED COMPONENT UTILITIES  (available to all child templates)
+    ═══════════════════════════════════════════════════════════════════════ */
+
+        /* Dashboard stat cards */
+        .stat-card {
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--card-radius);
+            padding: 22px;
+            transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+            height: 100%;
+        }
+
+        .stat-card:hover {
+            border-color: var(--brand-accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card .stat-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            margin-bottom: 14px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .stat-card .stat-trend {
+            font-size: 0.75rem;
+            margin-top: 10px;
+        }
+
+        /* Content section wrapper */
+        .content-card {
+            background: var(--surface-card);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--card-radius);
+            padding: 24px;
+        }
+
+        .content-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--surface-border);
+            margin-bottom: 20px;
+        }
+
+        .content-card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .content-card-title i {
+            color: var(--brand-accent);
+        }
+
+        /* Table overrides */
+        .table-dark-custom {
+            color: var(--text-secondary);
+        }
+
+        .table-dark-custom thead th {
+            background: var(--surface-bg);
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border-color: var(--surface-border);
+            padding: 12px 16px;
+        }
+
+        .table-dark-custom tbody td {
+            border-color: var(--surface-border);
+            padding: 14px 16px;
+            vertical-align: middle;
+            font-size: 0.875rem;
+            background: rgba(255, 255, 255, 0.025);
+            transition: background 0.15s;
+        }
+
+        .table-dark-custom tbody tr:hover td {
+            background: transparent;
+        }
+
+        /* Badges */
+        .badge-active {
+            background: rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-expired {
+            background: rgba(100, 116, 139, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+
+        .badge-suspended {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fde68a;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .badge-canceled {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-custom {
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 4px 10px;
+        }
+
+        /* Buttons */
+        .btn-accent {
+            background: linear-gradient(135deg, var(--brand-accent), var(--brand-accent-dark));
+            color: var(--surface-bg);
+            border: none;
+            border-radius: var(--btn-radius);
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+        }
+
+        .btn-accent:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(45, 212, 191, 0.35);
+            color: var(--surface-bg);
+        }
+
+        .btn-outline-subtle {
+            background: transparent;
+            border: 1px solid var(--surface-border);
+            color: var(--text-secondary);
+            border-radius: var(--btn-radius);
+            font-size: 0.875rem;
+            transition: border-color 0.2s, color 0.2s, background 0.2s;
+        }
+
+        .btn-outline-subtle:hover {
+            border-color: var(--brand-accent);
+            color: var(--brand-accent);
+            background: rgba(45, 212, 191, 0.05);
+        }
+
+        /* Page title section */
+        .page-header {
+            margin-bottom: 28px;
+        }
+
+        .page-header .page-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0 0 4px;
+        }
+
+        .page-header .page-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Alert-level indicators for subscriptions */
+        .alert-indicator-danger {
+            color: var(--brand-danger);
+        }
+
+        .alert-indicator-warning {
+            color: var(--brand-warning);
+        }
+
+        .alert-indicator-success {
+            color: var(--brand-success);
+        }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg,
+                    var(--surface-card) 25%, var(--surface-card-hover) 50%, var(--surface-card) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+            border-radius: 6px;
+        }
+
+        @keyframes skeleton-shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+        }
+
+        /* Divider with label */
+        .divider-label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+        }
+
+        .divider-label::before,
+        .divider-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--surface-border);
+        }
+
+        /* ── Page load fade-in ─────────────────────────────────────────── */
+        #main-wrapper {
+            animation: fadeInUp 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+     SIDEBAR MOBILE OVERLAY
+═══════════════════════════════════════════════════════════════════════════ -->
+    <div id="sidebar-overlay" aria-hidden="true"></div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════════════════════════════════════ -->
+    <nav id="sidebar" role="navigation" aria-label="القائمة الرئيسية">
+
+        {# ── Brand ──────────────────────────────────────────────────────────── #}
+        <a href="{{ url_for('dashboard') }}" class="sidebar-brand" aria-label="أكاديمية شيفرة — الصفحة الرئيسية">
+            <div class="sidebar-brand-icon" aria-hidden="true">
+                <i class="fa-solid fa-code"></i>
+            </div>
+            <div class="sidebar-brand-text">
+                <span class="brand-title">أكاديمية شيفرة</span>
+                <span class="brand-sub">CodeAcademy v1.0</span>
+            </div>
+        </a>
+
+        {# ── Navigation ─────────────────────────────────────────────────────── #}
+        <div class="sidebar-nav" role="list">
+
+            {# Section: الرئيسية #}
+            <div class="nav-section-label" aria-hidden="true">الرئيسية</div>
+
+            <a href="{{ url_for('dashboard') }}"
+                class="nav-item-link {% if request.endpoint == 'dashboard' %}active{% endif %}" role="listitem"
+                aria-current="{% if request.endpoint == 'dashboard' %}page{% endif %}">
+                <i class="fa-solid fa-gauge-high nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">لوحة التحكم</span>
+            </a>
+
+            {# Section: إدارة الأشخاص #}
+            <div class="nav-section-label" aria-hidden="true">إدارة الأشخاص</div>
+
+            <a href="#"
+                class="nav-item-link {% if request.endpoint and request.endpoint.startswith('users') %}active{% endif %}"
+                role="listitem">
+                <i class="fa-solid fa-users nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">المستخدمون</span>
+            </a>
+
+            <a href="{{ url_for('groups') }}" class=" nav-item-link {% if request.endpoint and request.endpoint.startswith('groups') %}active{% endif
+                %}" role="listitem">
+                <i class="fa-solid fa-layer-group nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">المجموعات</span>
+            </a>
+
+            {# Section: الاشتراكات المالية #}
+            <div class="nav-section-label" aria-hidden="true">الاشتراكات المالية</div>
+
+            <a href="{{ url_for('subscriptions') }}"
+                class=" nav-item-link {% if request.endpoint and request.endpoint.startswith('subscriptions') %}active{% endif %} "
+                role="listitem">
+                <i class="fa-solid fa-id-card nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">الاشتراكات</span>
+            </a>
+
+            <a href="#"
+                class="nav-item-link {% if request.endpoint and request.endpoint.startswith('plans') %}active{% endif %}"
+                role="listitem">
+                <i class="fa-solid fa-tags nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">خطط الاشتراك</span>
+            </a>
+
+            <a href="{{ url_for('all_receipts') }}"
+                class="nav-item-link {% if request.endpoint and request.endpoint.startswith('receipts') %}active{% endif %}"
+                role="listitem">
+                <i class="fa-solid fa-receipt nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">الإيصالات</span>
+            </a>
+
+            {# Section: الشهادات #}
+            <div class="nav-section-label" aria-hidden="true">أخرى</div>
+
+            <a href="{{ url_for('certificates') }}" class=" nav-item-link {% if request.endpoint and request.endpoint.startswith('certificates') %}active{%
+                endif %}" role="listitem">
+                <i class="fa-solid fa-certificate nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">الشهادات</span>
+            </a>
+
+            {# Admin-only items — wrap with role check in real routes #}
+            {% if current_user is defined and current_user.is_authenticated and current_user.is_admin %}
+            <a href="{{ url_for('db_stats') }}"
+                class="nav-item-link {% if request.endpoint == 'db_stats' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-database nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">إحصائيات النظام</span>
+            </a>
+            {% endif %}
+
+        </div>{# /.sidebar-nav #}
+
+        {# ── Sidebar Footer — logged-in user mini-profile ───────────────────── #}
+        <div class="sidebar-footer">
+            {% if current_user is defined and current_user.is_authenticated %}
+            <div class="sidebar-user" title="{{ current_user.full_name }}">
+                <div class="sidebar-avatar" aria-hidden="true">
+                    {{ current_user.fname[0] | upper }}
+                </div>
+                <div class="sidebar-user-info">
+                    <div class="sidebar-user-name">{{ current_user.full_name }}</div>
+                    <div class="sidebar-user-role">{{ current_user.role.value }}</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="sidebar-user" title="ضيف">
+                <div class="sidebar-avatar" aria-hidden="true">
+                    <i class="fa-solid fa-user" style="font-size:0.75rem;"></i>
+                </div>
+                <div class="sidebar-user-info">
+                    <div class="sidebar-user-name">ضيف</div>
+                    <div class="sidebar-user-role">—</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+    </nav>{# /#sidebar #}
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+     TOP NAVBAR
+═══════════════════════════════════════════════════════════════════════════ -->
+    <header id="topbar" role="banner">
+
+        {# ── Sidebar Toggle ────────────────────────────────────────────────── #}
+        <button id="sidebarToggleBtn" class="sidebar-toggle-btn" aria-label="تبديل القائمة الجانبية"
+            aria-expanded="true" aria-controls="sidebar" type="button">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
+        </button>
+
+        {# ── Page Title / Breadcrumb ───────────────────────────────────────── #}
+        <div class="topbar-page-title" aria-label="عنوان الصفحة">
+            <span class="text-secondary" style="font-weight:400;">أكاديمية شيفرة</span>
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+            <span class="page-name">{% block page_title %}الرئيسية{% endblock %}</span>
+        </div>
+
+        {# ── Actions ──────────────────────────────────────────────────────── #}
+        <div class="topbar-actions" role="toolbar" aria-label="أدوات الصفحة">
+
+            {# Notification bell — link to alerts page in production #}
+            <a href="#" class="topbar-icon-btn" aria-label="الإشعارات" title="الإشعارات">
+                <i class="fa-solid fa-bell" aria-hidden="true"></i>
+                <span class="notif-dot" aria-label="لديك إشعارات جديدة"></span>
+            </a>
+
+            {# Profile dropdown #}
+            <div class="dropdown" id="profileDropdownWrapper">
+                <a href="#" class="profile-dropdown-toggle" id="profileDropdownBtn" aria-expanded="false"
+                    aria-haspopup="true" aria-label="قائمة الملف الشخصي">
+
+                    <div class="profile-avatar" aria-hidden="true">
+                        {% if current_user is defined and current_user.is_authenticated %}
+                        {{ current_user.fname[0] | upper }}
+                        {% else %}
+                        <i class="fa-solid fa-user" style="font-size:0.7rem;"></i>
+                        {% endif %}
+                    </div>
+
+                    <div class="profile-info">
+                        <span class="profile-name">
+                            {% if current_user is defined and current_user.is_authenticated %}
+                            {{ current_user.full_name }}
+                            {% else %}
+                            ضيف
+                            {% endif %}
+                        </span>
+                        <span class="profile-role">
+                            {% if current_user is defined and current_user.is_authenticated %}
+                            {{ current_user.role.value }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <i class="fa-solid fa-chevron-down"
+                        style="font-size:0.65rem; color:var(--text-muted); margin-right:4px;" aria-hidden="true"></i>
+                </a>
+
+                <ul id="profileDropdownMenu" class="dropdown-menu-dark-custom" aria-labelledby="profileDropdownBtn"
+                    role="menu">
+
+                    <li>
+                        <h6 class="dropdown-header">الحساب الشخصي</h6>
+                    </li>
+
+                    <li>
+                        <a class="dropdown-item" href="#" role="menuitem">
+                            <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
+                            الملف الشخصي
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" role="menuitem">
+                            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                            الإعدادات
+                        </a>
+                    </li>
+
+                    <li>
+                        <hr class="dropdown-divider" role="separator" />
+                    </li>
+
+                    <li>
+                        <a class="dropdown-item text-danger" href="{{ url_for('logout') }}" role="menuitem"
+                            onclick="return confirm('هل تريد تسجيل الخروج؟')">
+                            <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                            تسجيل الخروج
+                        </a>
+                    </li>
+                </ul>
+            </div>{# /.dropdown #}
+
+        </div>{# /.topbar-actions #}
+    </header>{# /#topbar #}
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+     FLASH MESSAGES
+═══════════════════════════════════════════════════════════════════════════ -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container" role="alert" aria-live="polite" aria-atomic="false">
+        {% for category, message in messages %}
+        <div class="flash-alert alert-{{ category }} d-flex align-items-start" role="alert">
+            <span class="flash-icon" aria-hidden="true">
+                {% if category == 'success' %}
+                <i class="fa-solid fa-circle-check"></i>
+                {% elif category == 'danger' or category == 'error' %}
+                <i class="fa-solid fa-circle-xmark"></i>
+                {% elif category == 'warning' %}
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                {% else %}
+                <i class="fa-solid fa-circle-info"></i>
+                {% endif %}
+            </span>
+            <span class="flash-body">{{ message }}</span>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="إغلاق الإشعار">
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════════════════════ -->
+    <main id="main-wrapper" role="main" aria-label="المحتوى الرئيسي">
+        {% block content %}
+        {# ── Default content (shown when no child template overrides this block) #}
+        <div class="page-header">
+            <h1 class="page-title">لوحة التحكم</h1>
+            <p class="page-subtitle">مرحباً بك في أكاديمية شيفرة — نظرة عامة على المنصة</p>
+        </div>
+
+        <div class="content-card">
+            <div class="empty-state">
+                <i class="fa-solid fa-rocket" aria-hidden="true"></i>
+                <p>النظام يعمل بنجاح. ابدأ بإنشاء قوالب الصفحات.</p>
+            </div>
+        </div>
+        {% endblock %}
+    </main>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════════════════════════════════════════════ -->
+    {# Bootstrap 5 Bundle — local offline copy #}
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+
+    <script>
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SIDEBAR CONTROLLER
+           ─ Desktop: collapses to icon-only rail (72px)
+           ─ Mobile:  slides in/out as a drawer over the content
+        ═══════════════════════════════════════════════════════════════════════════ */
+        (function () {
+            'use strict';
+
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggleBtn = document.getElementById('sidebarToggleBtn');
+            const MOBILE_BP = 992;                 // matches Bootstrap lg breakpoint
+            const STORAGE_KEY = 'shyfra_sidebar';    // persists user preference
+
+            // ── Determine current mode ────────────────────────────────────────────
+            const isMobile = () => window.innerWidth < MOBILE_BP;
+
+            // ── Desktop: restore last state from localStorage ─────────────────────
+            if (!isMobile() && localStorage.getItem(STORAGE_KEY) === 'collapsed' && sidebar) {
+                sidebar.classList.add('collapsed');
+                document.body.classList.add('sidebar-collapsed');
+                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            // ── Toggle handler ────────────────────────────────────────────────────
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function () {
+                    if (isMobile()) {
+                        // Mobile: toggle drawer
+                        const isOpen = sidebar ? sidebar.classList.toggle('mobile-open') : false;
+                        if (overlay) overlay.classList.toggle('show', isOpen);
+                        toggleBtn.setAttribute('aria-expanded', String(isOpen));
+                    } else {
+                        // Desktop: collapse / expand rail
+                        const isCollapsed = sidebar ? sidebar.classList.toggle('collapsed') : false;
+                        document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+                        toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+                        localStorage.setItem(STORAGE_KEY, isCollapsed ? 'collapsed' : 'expanded');
+                    }
+                });
+            }
+
+            // ── Close mobile drawer on overlay click ──────────────────────────────
+            if (overlay) {
+                overlay.addEventListener('click', function () {
+                    if (sidebar) sidebar.classList.remove('mobile-open');
+                    overlay.classList.remove('show');
+                    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+                });
+            }
+
+            // ── Re-evaluate on resize (e.g. rotating phone → tablet) ──────────────
+            window.addEventListener('resize', function () {
+                if (!isMobile()) {
+                    // Clean up mobile-specific classes when crossing breakpoint
+                    if (sidebar) sidebar.classList.remove('mobile-open');
+                    if (overlay) overlay.classList.remove('show');
+                }
+            });
+
+            // ── Auto-dismiss flash alerts after 5 s ───────────────────────────────
+            document.querySelectorAll('.flash-alert').forEach(function (el) {
+                if (typeof bootstrap !== 'undefined') {
+                    const bsAlert = new bootstrap.Alert(el);
+                    setTimeout(function () {
+                        // Fade out gracefully then remove
+                        el.style.transition = 'opacity 0.5s, transform 0.5s';
+                        el.style.opacity = '0';
+                        el.style.transform = 'translateY(-10px) scale(0.97)';
+                        setTimeout(function () { bsAlert.close(); }, 500);
+                    }, 5000);
+                } else {
+                    setTimeout(function () { el.style.display = 'none'; }, 5000);
+                }
+            });
+
+            // ── Highlight active nav link (fallback for pages without Flask endpoint) #
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.nav-item-link').forEach(function (link) {
+                if (link.href && new URL(link.href).pathname === currentPath) {
+                    link.classList.add('active');
+                    link.setAttribute('aria-current', 'page');
+                }
+            });
+
+            // ── Profile Dropdown (ID-based, 100% reliable) ──────────────────────
+            (function () {
+                var btn = document.getElementById('profileDropdownBtn');
+                var menu = document.getElementById('profileDropdownMenu');
+
+                if (!btn || !menu) return;   // Not on a page with a profile dropdown
+
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var isOpen = menu.style.display === 'block';
+                    if (isOpen) {
+                        menu.style.display = 'none';
+                        btn.setAttribute('aria-expanded', 'false');
+                    } else {
+                        menu.style.display = 'block';
+                        btn.setAttribute('aria-expanded', 'true');
+                    }
+                });
+
+                // Close when clicking anywhere outside this dropdown
+                document.addEventListener('click', function (e) {
+                    if (!document.getElementById('profileDropdownWrapper').contains(e.target)) {
+                        menu.style.display = 'none';
+                        btn.setAttribute('aria-expanded', 'false');
+                    }
+                });
+            })();
+
+            // ── Actions-table Dropdown (class-based for multiple rows) ───────────
+            document.querySelectorAll('.btn-actions').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var menu = this.nextElementSibling;
+                    if (!menu) return;
+
+                    var isOpen = menu.style.display === 'block';
+
+                    // Close all other action menus first
+                    document.querySelectorAll('.actions-dropdown').forEach(function (m) {
+                        m.style.display = 'none';
+                    });
+
+                    if (!isOpen) {
+                        menu.style.display = 'block';
+                    }
+                });
+            });
+
+            // Close action dropdowns when clicking elsewhere
+            document.addEventListener('click', function () {
+                document.querySelectorAll('.actions-dropdown').forEach(function (m) {
+                    m.style.display = 'none';
+                });
+            });
+
+        })();
+    </script>
+
+    {# ── Page-specific scripts block ──────────────────────────────────────── #}
+    {% block scripts %}{% endblock %}
+
+</body>
+
+</html>
