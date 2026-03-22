@@ -274,11 +274,13 @@ Variables: plans list[SubscriptionPlan]
         <p class="page-subtitle">تحديد أسعار ومدد خطط الاشتراك المتاحة للطلاب</p>
     </div>
 
+    {% if current_user.is_admin %}
     <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
         data-bs-toggle="modal" data-bs-target="#addPlanModal" aria-label="إضافة خطة اشتراك جديدة">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         إضافة خطة جديدة
     </button>
+    {% endif %}
 </div>
 
 {# ── Summary banner ──────────────────────────────────────────────────────── #}
@@ -330,7 +332,9 @@ MAIN CONTENT CARD
                     <th scope="col">السعر</th>
                     <th scope="col" class="col-usage text-center">الاستخدام</th>
                     <th scope="col" class="text-center" style="width:100px;">الحالة</th>
+                    {% if current_user.is_admin %}
                     <th scope="col" class="text-center" style="width:110px;">إجراء</th>
+                    {% endif %}
                 </tr>
             </thead>
 
@@ -393,6 +397,7 @@ MAIN CONTENT CARD
                     </td>
 
                     {# Toggle action #}
+                    {% if current_user.is_admin %}
                     <td class="text-center">
                         <form method="POST" action="{{ url_for('toggle_plan', plan_id=plan.plan_id) }}"
                             style="display:inline;">
@@ -412,6 +417,7 @@ MAIN CONTENT CARD
                             {% endif %}
                         </form>
                     </td>
+                    {% endif %}
 
                 </tr>
                 {% else %}
@@ -422,10 +428,12 @@ MAIN CONTENT CARD
                         </span>
                         لا توجد خطط اشتراك بعد.
                         <br />
+                        {% if current_user.is_admin %}
                         <button type="button" data-bs-toggle="modal" data-bs-target="#addPlanModal" style="color:#2dd4bf;background:none;border:none;
                            cursor:pointer;font-size:.85rem;margin-top:8px;">
                             أضف أول خطة الآن
                         </button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

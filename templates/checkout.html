@@ -1,0 +1,990 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+checkout.html — تجديد / ترقية الاشتراك (Mock Payment)
+Extends : base.html
+Route : GET /checkout (Member only)
+Variables: active_plans list[SubscriptionPlan]
+current_subscription Subscription | None
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}
+{% if current_subscription and current_subscription.status.value == 'Active' %}
+تجديد الاشتراك
+{% else %}
+الاشتراك في الأكاديمية
+{% endif %}
+— أكاديمية شيفرة
+{% endblock %}
+
+{% block page_title %}تجديد / ترقية الاشتراك{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ═══════════════════════════════════════════════════════════════════════
+     PLAN RADIO CARDS
+  ═══════════════════════════════════════════════════════════════════════ */
+    .plan-radio-wrap {
+        display: none;
+        /* visually hidden — we use the card as the clickable area */
+    }
+
+    .plan-card-label {
+        display: block;
+        cursor: pointer;
+        border: 2px solid var(--surface-border);
+        border-radius: 14px;
+        background: var(--surface-card);
+        padding: 20px;
+        transition: border-color .2s, background .2s, transform .2s, box-shadow .2s;
+        position: relative;
+        height: 100%;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    .plan-card-label:hover {
+        border-color: rgba(45, 212, 191, .4);
+        background: var(--surface-card-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, .3);
+    }
+
+    /* Highlight when radio is checked */
+    .plan-radio-wrap:checked+.plan-card-label {
+        border-color: #2dd4bf;
+        background: linear-gradient(135deg,
+                rgba(45, 212, 191, .12),
+                rgba(45, 212, 191, .04));
+        box-shadow: 0 0 0 1px rgba(45, 212, 191, .3),
+            0 10px 32px rgba(0, 0, 0, .3);
+        transform: translateY(-2px);
+    }
+
+    /* Checkmark indicator top-left (RTL: top-right) */
+    .plan-card-label::before {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid var(--surface-border);
+        background: var(--surface-bg);
+        transition: border-color .2s, background .2s;
+    }
+
+    .plan-radio-wrap:checked+.plan-card-label::before {
+        border-color: #2dd4bf;
+        background: #2dd4bf;
+    }
+
+    /* Check icon inside the circle */
+    .plan-card-label::after {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 18px;
+        width: 5px;
+        height: 9px;
+        border: 2px solid var(--surface-bg);
+        border-top: none;
+        border-right: none;
+        border-left: 2px solid #0f172a;
+        border-bottom: 2px solid #0f172a;
+        transform: rotate(-45deg) translateY(-2px);
+        opacity: 0;
+        transition: opacity .15s;
+    }
+
+    .plan-radio-wrap:checked+.plan-card-label::after {
+        opacity: 1;
+    }
+
+    /* Plan card content */
+    .plan-badge-best {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 9px;
+        border-radius: 20px;
+        font-size: .65rem;
+        font-weight: 700;
+        background: rgba(245, 158, 11, .15);
+        border: 1px solid rgba(245, 158, 11, .3);
+        color: #fbbf24;
+        position: absolute;
+        top: 14px;
+        right: 14px;
+    }
+
+    .plan-card-name {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-top: 10px;
+        margin-bottom: 4px;
+    }
+
+    .plan-radio-wrap:checked+.plan-card-label .plan-card-name {
+        color: #2dd4bf;
+    }
+
+    .plan-card-duration {
+        font-size: .8rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 16px;
+    }
+
+    .plan-card-price {
+        font-size: 1.8rem;
+        font-weight: 900;
+        color: var(--text-primary);
+        line-height: 1;
+    }
+
+    .plan-card-price .price-currency {
+        font-size: .9rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        vertical-align: super;
+        margin-right: 2px;
+    }
+
+    .plan-radio-wrap:checked+.plan-card-label .plan-card-price {
+        color: #2dd4bf;
+    }
+
+    .plan-card-per {
+        font-size: .72rem;
+        color: var(--text-muted);
+        margin-top: 3px;
+    }
+
+    .plan-card-divider {
+        border: none;
+        border-top: 1px solid var(--surface-border);
+        margin: 14px 0;
+    }
+
+    .plan-card-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .plan-card-features li {
+        font-size: .78rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+    .plan-card-features li i {
+        color: #2dd4bf;
+        font-size: .7rem;
+        flex-shrink: 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     MOCK CREDIT CARD FORM
+  ═══════════════════════════════════════════════════════════════════════ */
+    .form-label-dark {
+        font-size: .78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+
+    .form-label-dark i {
+        color: #2dd4bf;
+        font-size: .72rem;
+    }
+
+    .required-star {
+        color: #f87171;
+        margin-right: 2px;
+    }
+
+    .form-control-dark {
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .9rem;
+        padding: 11px 14px;
+        width: 100%;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .form-control-dark::placeholder {
+        color: var(--text-muted);
+    }
+
+    .form-control-dark:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .15);
+        background: #0f1f38;
+    }
+
+    /* Card number and expiry: LTR inside RTL page */
+    .form-control-ltr {
+        direction: ltr;
+        text-align: left;
+        font-family: var(--font-mono);
+        letter-spacing: .1em;
+    }
+
+    /* ── Credit card visual preview ──────────────────────────────────── */
+    .card-preview {
+        background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 40%, #1a1f3c 100%);
+        border-radius: 16px;
+        padding: 22px 24px;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 24px;
+        min-height: 165px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+    }
+
+    .card-preview::before {
+        content: '';
+        position: absolute;
+        top: -40px;
+        right: -40px;
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: rgba(45, 212, 191, .08);
+        pointer-events: none;
+    }
+
+    .card-preview::after {
+        content: '';
+        position: absolute;
+        bottom: -60px;
+        left: -30px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(99, 102, 241, .06);
+        pointer-events: none;
+    }
+
+    .card-preview .card-chip {
+        width: 36px;
+        height: 28px;
+        border-radius: 5px;
+        background: linear-gradient(135deg, #d4a843, #c8922a);
+        margin-bottom: 16px;
+        position: relative;
+        z-index: 1;
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, .3);
+    }
+
+    .card-preview .card-num-display {
+        font-family: var(--font-mono);
+        font-size: 1.15rem;
+        letter-spacing: .18em;
+        color: rgba(255, 255, 255, .9);
+        margin-bottom: 16px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .card-preview .card-meta {
+        display: flex;
+        justify-content: space-between;
+        position: relative;
+        z-index: 1;
+    }
+
+    .card-preview .card-meta-label {
+        font-size: .6rem;
+        color: rgba(255, 255, 255, .45);
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        margin-bottom: 2px;
+    }
+
+    .card-preview .card-meta-value {
+        font-size: .82rem;
+        color: rgba(255, 255, 255, .85);
+        font-family: var(--font-mono);
+        letter-spacing: .06em;
+    }
+
+    .card-preview .card-network {
+        position: absolute;
+        bottom: 20px;
+        left: 24px;
+        display: flex;
+        gap: -8px;
+        z-index: 1;
+    }
+
+    .card-network-circle {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        opacity: .8;
+    }
+
+    .card-network-circle:first-child {
+        background: #e74c3c;
+        margin-left: -10px;
+    }
+
+    .card-network-circle:last-child {
+        background: #f39c12;
+    }
+
+    /* ── Security badges ─────────────────────────────────────────────── */
+    .security-badges {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 12px 0;
+        margin-top: 4px;
+        border-top: 1px solid var(--surface-border);
+    }
+
+    .sec-badge {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: .7rem;
+        color: var(--text-muted);
+    }
+
+    .sec-badge i {
+        color: #34d399;
+    }
+
+    /* ── Mock disclaimer banner ──────────────────────────────────────── */
+    .mock-disclaimer {
+        background: rgba(245, 158, 11, .07);
+        border: 1px solid rgba(245, 158, 11, .2);
+        border-radius: 10px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: .78rem;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+    }
+
+    .mock-disclaimer i {
+        color: #fbbf24;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    /* ── Current subscription info box ──────────────────────────────── */
+    .current-sub-box {
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: .82rem;
+    }
+
+    .current-sub-box .sub-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .9rem;
+    }
+
+    .sub-icon-active {
+        background: rgba(16, 185, 129, .1);
+        color: #34d399;
+    }
+
+    .sub-icon-expired {
+        background: rgba(239, 68, 68, .1);
+        color: #f87171;
+    }
+
+    .sub-icon-suspended {
+        background: rgba(245, 158, 11, .1);
+        color: #fbbf24;
+    }
+
+    .sub-icon-none {
+        background: rgba(45, 212, 191, .1);
+        color: #2dd4bf;
+    }
+
+    /* ── Submit button animation ─────────────────────────────────────── */
+    .btn-pay {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(135deg, #2dd4bf, #0f9488);
+        color: #0f172a;
+        border: none;
+        border-radius: 12px;
+        font-family: var(--font-arabic);
+        font-size: .95rem;
+        font-weight: 800;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: opacity .2s, transform .15s, box-shadow .2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        letter-spacing: .02em;
+    }
+
+    .btn-pay:hover {
+        opacity: .92;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 28px rgba(45, 212, 191, .35);
+    }
+
+    .btn-pay:active {
+        transform: translateY(0);
+    }
+
+    .btn-pay::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(110deg, transparent 30%,
+                rgba(255, 255, 255, .14) 50%, transparent 70%);
+        transform: translateX(-100%);
+        transition: transform .55s ease;
+    }
+
+    .btn-pay:hover::after {
+        transform: translateX(100%);
+    }
+
+    .btn-pay .pay-spinner {
+        display: none;
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(15, 23, 42, .25);
+        border-top-color: #0f172a;
+        border-radius: 50%;
+        animation: paySpinAnim .6s linear infinite;
+    }
+
+    .btn-pay.loading .pay-spinner {
+        display: block;
+    }
+
+    .btn-pay.loading .pay-text {
+        opacity: .6;
+    }
+
+    @keyframes paySpinAnim {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* ── Section title ────────────────────────────────────────────────── */
+    .checkout-section-title {
+        font-size: .72rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .checkout-section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--surface-border);
+    }
+
+    /* ── Page entrance animation ──────────────────────────────────────── */
+    .checkout-col {
+        animation: colFadeUp .45s cubic-bezier(.34, 1.56, .64, 1) both;
+    }
+
+    .checkout-col:first-child {
+        animation-delay: 0s;
+    }
+
+    .checkout-col:last-child {
+        animation-delay: .08s;
+    }
+
+    @keyframes colFadeUp {
+        from {
+            opacity: 0;
+            transform: translateY(18px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @media (max-width: 767px) {
+        .card-preview {
+            min-height: auto;
+        }
+
+        .plan-card-price {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page header ─────────────────────────────────────────────────────────── #}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-credit-card me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+            {% if current_subscription and current_subscription.status.value == 'Active' %}
+            تجديد / ترقية الاشتراك
+            {% else %}
+            الاشتراك في الأكاديمية
+            {% endif %}
+        </h1>
+        <p class="page-subtitle">اختر الخطة المناسبة وأتمّ الدفع التجريبي لتفعيل اشتراكك</p>
+    </div>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-subtle d-flex align-items-center gap-2"
+        style="height:38px;">
+        <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        العودة للوحة التحكم
+    </a>
+</div>
+
+{# ── Mock disclaimer ──────────────────────────────────────────────────────── #}
+<div class="mock-disclaimer" role="note" aria-label="تنبيه بيئة تجريبية">
+    <i class="fa-solid fa-flask-vial" aria-hidden="true"></i>
+    <span>
+        <strong style="color:#fbbf24;">بيئة تجريبية:</strong>
+        هذه صفحة دفع وهمية لأغراض مشروع التخرج. لا يتم خصم أي مبلغ حقيقي.
+        استخدم أي بيانات بطاقة للاختبار (مثال: <code
+            style="color:#2dd4bf;font-family:var(--font-mono);">0000 0000 0000 0000</code>).
+    </span>
+</div>
+
+{# ══════════════════════════════════════════════════════════════════════════
+MAIN FORM — wraps both columns
+══════════════════════════════════════════════════════════════════════════ #}
+<form method="POST" action="{{ url_for('process_payment') }}" id="checkoutForm" novalidate
+    aria-label="نموذج الدفع والاشتراك">
+
+    <div class="row g-4 align-items-start">
+
+        {# ══ RIGHT COLUMN — Plan Selection ════════════════════════════════════ #}
+        <div class="col-12 col-lg-6 checkout-col" role="group" aria-labelledby="plansHeading">
+
+            <div class="checkout-section-title" id="plansHeading">
+                <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                اختر خطتك
+            </div>
+
+            {# Current subscription context card #}
+            {% if current_subscription %}
+            {% set cs = current_subscription %}
+            {% if cs.status.value == 'Active' %}
+            {% set sub_icon_cls = 'sub-icon-active' %}
+            {% set sub_icon = 'fa-circle-check' %}
+            {% set sub_label = 'اشتراكك الحالي نشط — التجديد سيمدد المدة' %}
+            {% set sub_color = '#34d399' %}
+            {% elif cs.status.value == 'Expired' %}
+            {% set sub_icon_cls = 'sub-icon-expired' %}
+            {% set sub_icon = 'fa-hourglass-end' %}
+            {% set sub_label = 'اشتراكك منتهٍ — الدفع سيُعيد تفعيله' %}
+            {% set sub_color = '#f87171' %}
+            {% elif cs.status.value == 'Suspended' %}
+            {% set sub_icon_cls = 'sub-icon-suspended' %}
+            {% set sub_icon = 'fa-pause-circle' %}
+            {% set sub_label = 'اشتراكك معلّق — الدفع سيُعيد تفعيله' %}
+            {% set sub_color = '#fbbf24' %}
+            {% else %}
+            {% set sub_icon_cls = 'sub-icon-none' %}
+            {% set sub_icon = 'fa-circle-xmark' %}
+            {% set sub_label = 'اشتراكك ملغى — الدفع سيبدأ اشتراكاً جديداً' %}
+            {% set sub_color = '#94a3b8' %}
+            {% endif %}
+
+            <div class="current-sub-box" role="status">
+                <div class="sub-icon {{ sub_icon_cls }}" aria-hidden="true">
+                    <i class="fa-solid {{ sub_icon }}"></i>
+                </div>
+                <div>
+                    <div style="font-weight:600;color:{{ sub_color }};margin-bottom:3px;font-size:.82rem;">
+                        {{ sub_label }}
+                    </div>
+                    {% if cs.status.value == 'Active' %}
+                    <div style="font-size:.72rem;color:var(--text-muted);font-family:var(--font-mono);">
+                        ينتهي: {{ cs.end_date.strftime('%Y-%m-%d') }}
+                        &nbsp;·&nbsp;
+                        {{ (cs.end_date - today).days if today is defined else '' }} يوم متبقٍّ
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Plan cards grid #}
+            {% if active_plans %}
+            <div class="d-flex flex-column gap-3" role="radiogroup" aria-label="خطط الاشتراك المتاحة">
+
+                {% for plan in active_plans %}
+                <div>
+                    <input type="radio" class="plan-radio-wrap" id="plan_{{ plan.plan_id }}" name="plan_id"
+                        value="{{ plan.plan_id }}" {% if loop.first %}checked{% endif %} required
+                        aria-required="true" />
+
+                    <label class="plan-card-label" for="plan_{{ plan.plan_id }}"
+                        aria-label="{{ plan.plan_name }} — {{ plan.duration_months }} شهر — {{ '{:,.0f}'.format(plan.price|float) }} دج">
+
+                        {# Best-value badge for the longest plan #}
+                        {% if loop.last and active_plans | length > 1 %}
+                        <span class="plan-badge-best" aria-label="الأفضل قيمةً">
+                            <i class="fa-solid fa-star" style="font-size:.55rem;" aria-hidden="true"></i>
+                            الأفضل قيمةً
+                        </span>
+                        {% endif %}
+
+                        <div class="plan-card-name">{{ plan.plan_name }}</div>
+
+                        <div class="plan-card-duration">
+                            <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                            {{ plan.duration_months }}
+                            {% if plan.duration_months == 1 %}شهر{% else %}أشهر{% endif %}
+                            وصول كامل
+                        </div>
+
+                        <div class="plan-card-price" aria-label="{{ '{:,.2f}'.format(plan.price|float) }} دينار جزائري">
+                            <span class="price-currency">دج</span>
+                            {{ "{:,.0f}".format(plan.price | float) }}
+                        </div>
+
+                        <div class="plan-card-per">
+                            {{ "{:,.0f}".format((plan.price | float) / plan.duration_months) }} دج/شهر
+                        </div>
+
+                        <hr class="plan-card-divider" />
+
+                        <ul class="plan-card-features">
+                            <li>
+                                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                وصول لجميع المحتويات
+                            </li>
+                            <li>
+                                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                متابعة مباشرة من المدرب
+                            </li>
+                            <li>
+                                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                شهادة إتمام عند الانتهاء
+                            </li>
+                            {% if plan.duration_months >= 12 %}
+                            <li>
+                                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                <strong style="color:#fbbf24;">شهران مجاناً</strong> مقارنةً بالشهري
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </label>
+                </div>
+                {% endfor %}
+
+            </div>
+            {% else %}
+            <div style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+                <i class="fa-solid fa-tags" style="font-size:2rem;opacity:.3;display:block;margin-bottom:12px;"
+                    aria-hidden="true"></i>
+                <p>لا توجد خطط متاحة حالياً. يرجى التواصل مع الإدارة.</p>
+            </div>
+            {% endif %}
+
+        </div>{# /right column - plans #}
+
+
+        {# ══ LEFT COLUMN — Mock Payment Form ══════════════════════════════════ #}
+        <div class="col-12 col-lg-6 checkout-col">
+
+            <div class="checkout-section-title">
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                بيانات الدفع (تجريبي)
+            </div>
+
+            {# Credit card visual preview #}
+            <div class="card-preview" role="img" aria-label="معاينة بطاقة الدفع">
+                <div class="card-chip" aria-hidden="true"></div>
+                <div class="card-num-display" id="cardNumDisplay" aria-live="polite">
+                    0000 0000 0000 0000
+                </div>
+                <div class="card-meta">
+                    <div>
+                        <div class="card-meta-label">اسم حامل البطاقة</div>
+                        <div class="card-meta-value" id="cardNameDisplay">
+                            {{ current_user.full_name }}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="card-meta-label">تاريخ الانتهاء</div>
+                        <div class="card-meta-value" id="cardExpiryDisplay">MM/YY</div>
+                    </div>
+                </div>
+                {# Mock network logo #}
+                <div class="card-network" aria-hidden="true">
+                    <div class="card-network-circle"></div>
+                    <div class="card-network-circle"></div>
+                </div>
+            </div>
+
+            {# Payment form fields #}
+            <div class="content-card">
+
+                <div class="d-flex flex-column gap-4">
+
+                    {# Cardholder name #}
+                    <div>
+                        <label class="form-label-dark" for="card_name">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
+                            اسم حامل البطاقة
+                            <span class="required-star" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" id="card_name" name="card_name" class="form-control-dark"
+                            placeholder="{{ current_user.full_name }}" value="{{ current_user.full_name }}"
+                            autocomplete="cc-name" required aria-required="true" aria-describedby="card_name_help" />
+                        <div id="card_name_help" style="font-size:.7rem;color:var(--text-muted);margin-top:4px;">
+                            الاسم كما يظهر على البطاقة البنكية
+                        </div>
+                    </div>
+
+                    {# Card number #}
+                    <div>
+                        <label class="form-label-dark" for="card_number">
+                            <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+                            رقم البطاقة
+                            <span class="required-star" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" id="card_number" name="card_number"
+                            class="form-control-dark form-control-ltr" placeholder="0000  0000  0000  0000"
+                            maxlength="19" autocomplete="cc-number" inputmode="numeric" required aria-required="true"
+                            aria-label="رقم البطاقة (16 رقم)" />
+                    </div>
+
+                    {# Expiry + CVV side-by-side #}
+                    <div class="row g-3">
+                        <div class="col-7">
+                            <label class="form-label-dark" for="card_expiry">
+                                <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                                تاريخ الانتهاء
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <input type="text" id="card_expiry" name="card_expiry"
+                                class="form-control-dark form-control-ltr" placeholder="MM / YY" maxlength="5"
+                                autocomplete="cc-exp" inputmode="numeric" required aria-required="true"
+                                aria-label="تاريخ انتهاء البطاقة (شهر/سنة)" />
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label-dark" for="card_cvv">
+                                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                                CVV
+                                <span class="required-star" aria-hidden="true">*</span>
+                            </label>
+                            <div style="position:relative;">
+                                <input type="password" id="card_cvv" name="card_cvv"
+                                    class="form-control-dark form-control-ltr" placeholder="•••" maxlength="4"
+                                    autocomplete="cc-csc" inputmode="numeric" required aria-required="true"
+                                    aria-label="رمز CVV المكوّن من 3 أو 4 أرقام" aria-describedby="cvv_help" />
+                            </div>
+                            <div id="cvv_help" style="font-size:.68rem;color:var(--text-muted);margin-top:4px;">
+                                3 أو 4 أرقام خلف البطاقة
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Security badges #}
+                    <div class="security-badges" aria-label="رموز الأمان">
+                        <span class="sec-badge">
+                            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                            تشفير SSL
+                        </span>
+                        <span class="sec-badge">
+                            <i class="fa-solid fa-shield-check" aria-hidden="true"></i>
+                            بيئة آمنة
+                        </span>
+                        <span class="sec-badge">
+                            <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                            بيانات محمية
+                        </span>
+                    </div>
+
+                    {# Summary row: selected plan price (dynamic) #}
+                    <div style="background:var(--surface-bg);border:1px solid var(--surface-border);
+                      border-radius:10px;padding:14px 18px;">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span style="font-size:.82rem;color:var(--text-secondary);">
+                                المبلغ الإجمالي المستحق:
+                            </span>
+                            <span id="summaryPrice" style="font-size:1.15rem;font-weight:800;color:#2dd4bf;
+                           font-family:var(--font-mono);" aria-live="polite" aria-label="المبلغ المستحق">
+                                {# Default: show first plan price #}
+                                {% if active_plans %}
+                                {{ "{:,.0f}".format(active_plans[0].price | float) }} دج
+                                {% else %}
+                                — دج
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div style="font-size:.7rem;color:var(--text-muted);margin-top:5px;">
+                            * هذا مبلغ تجريبي — لن يتم خصم أي مبلغ فعلي
+                        </div>
+                    </div>
+
+                    {# Submit button #}
+                    <button type="submit" class="btn-pay" id="payBtn" aria-label="إتمام الدفع التجريبي وتفعيل الاشتراك">
+                        <span class="pay-spinner" aria-hidden="true"></span>
+                        <i class="fa-solid fa-lock me-1 pay-text" aria-hidden="true"></i>
+                        <span class="pay-text">إتمام الدفع (تجريبي)</span>
+                    </button>
+
+                </div>{# /.d-flex form fields #}
+            </div>{# /.content-card #}
+
+        </div>{# /left column - payment form #}
+
+    </div>{# /.row #}
+
+</form>
+
+{% endblock %}
+
+
+{% block scripts %}
+{# Embed plan prices as a JSON map for the JS price-sync ─────────────────── #}
+<script>
+    (function () {
+        'use strict';
+
+        /* ── Plan price map (injected from Jinja) ───────────────────────── */
+        var PLAN_PRICES = {
+    {% for plan in active_plans %}
+        "{{ plan.plan_id }}": "{{ '{:,.0f}'.format(plan.price | float) }} دج"{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    };
+
+    var PLAN_NAMES = {
+    {% for plan in active_plans %}
+    "{{ plan.plan_id }}": "{{ plan.plan_name }}"{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  };
+
+    /* ── Elements ────────────────────────────────────────────────────── */
+    var form = document.getElementById('checkoutForm');
+    var payBtn = document.getElementById('payBtn');
+    var summaryPrice = document.getElementById('summaryPrice');
+    var cardNumEl = document.getElementById('cardNumDisplay');
+    var cardNameEl = document.getElementById('cardNameDisplay');
+    var cardExpiryEl = document.getElementById('cardExpiryDisplay');
+
+    var cardNameInput = document.getElementById('card_name');
+    var cardNumberInput = document.getElementById('card_number');
+    var cardExpiryInput = document.getElementById('card_expiry');
+
+    /* ── 1. Sync summary price when plan radio changes ───────────────── */
+    document.querySelectorAll('input[name="plan_id"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            var price = PLAN_PRICES[this.value] || '—';
+            if (summaryPrice) summaryPrice.textContent = price;
+        });
+    });
+
+    /* ── 2. Live card preview sync ───────────────────────────────────── */
+    if (cardNameInput && cardNameEl) {
+        cardNameInput.addEventListener('input', function () {
+            cardNameEl.textContent = this.value.trim().toUpperCase() || 'FULL NAME';
+        });
+    }
+
+    if (cardNumberInput && cardNumEl) {
+        cardNumberInput.addEventListener('input', function () {
+            /* Format as groups of 4 */
+            var raw = this.value.replace(/\D/g, '').slice(0, 16);
+            var formatted = raw.match(/.{1,4}/g);
+            this.value = formatted ? formatted.join('  ') : raw;
+            cardNumEl.textContent = this.value || '0000  0000  0000  0000';
+        });
+    }
+
+    if (cardExpiryInput && cardExpiryEl) {
+        cardExpiryInput.addEventListener('input', function () {
+            var raw = this.value.replace(/\D/g, '').slice(0, 4);
+            if (raw.length > 2) {
+                this.value = raw.slice(0, 2) + '/' + raw.slice(2);
+            } else {
+                this.value = raw;
+            }
+            cardExpiryEl.textContent = this.value || 'MM/YY';
+        });
+    }
+
+    /* ── 3. Form submit: show loading state ──────────────────────────── */
+    if (form && payBtn) {
+        form.addEventListener('submit', function (e) {
+            /* Make sure a plan is selected */
+            var selected = document.querySelector('input[name="plan_id"]:checked');
+            if (!selected) {
+                e.preventDefault();
+                alert('يرجى اختيار خطة اشتراك أولاً.');
+                return;
+            }
+            payBtn.classList.add('loading');
+            payBtn.disabled = true;
+        });
+    }
+
+    /* ── 4. CVV: allow only digits ───────────────────────────────────── */
+    var cvvInput = document.getElementById('card_cvv');
+    if (cvvInput) {
+        cvvInput.addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '').slice(0, 4);
+        });
+    }
+
+}) ();
+</script>
+{% endblock %}

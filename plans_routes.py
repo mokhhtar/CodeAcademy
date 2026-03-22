@@ -53,7 +53,6 @@ def _register_plan_routes(app) -> None:
 
     @app.route("/plans", methods=["GET"])
     @login_required
-    @admin_required
     def plans():
         """
         Render the subscription plans management page.

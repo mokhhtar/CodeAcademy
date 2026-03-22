@@ -63,7 +63,6 @@ def _register_group_routes(app) -> None:
 
     @app.route("/groups", methods=["GET"])
     @login_required
-    @admin_required
     def groups():
         """
         Render the groups management page.
@@ -75,12 +74,24 @@ def _register_group_routes(app) -> None:
                       (pre-fetched so the Add modal's <select> is populated
                        without a second request)
         """
-        all_groups  = (
-            Group.query
-            .order_by(Group.created_at.desc())
-            .all()
-        )
-        supervisors = _get_supervisors()
+        if current_user.is_member:
+            flash("هذه الصفحة مخصصة للإدارة فقط.", "warning")
+            return redirect(url_for("courses"))
+        if current_user.role == RoleEnum.Supervisor:
+            all_groups = (
+                Group.query
+                .filter_by(supervisor_id=current_user.user_id)
+                .order_by(Group.created_at.desc())
+                .all()
+            )
+        else:
+            all_groups = (
+                Group.query
+                .order_by(Group.created_at.desc())
+                .all()
+            )
+            
+        supervisors = _get_supervisors() if current_user.is_admin else []
 
         return render_template(
             "groups.html",

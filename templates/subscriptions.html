@@ -480,7 +480,7 @@ status_filter, search_query, status_choices, today
             عرض وتعديل جميع اشتراكات الطلاب — تجديد، تعليق، إلغاء
         </p>
     </div>
-    <a href="#" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+    <a href="{% if current_user.is_member %}{{ url_for('checkout') }}{% else %}#{% endif %}" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
         aria-label="إضافة اشتراك جديد">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         اشتراك جديد

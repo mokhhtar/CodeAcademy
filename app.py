@@ -49,6 +49,8 @@ from models import (
     UserStatusEnum,
     db,
 )
+from payment_routes import _register_payment_routes
+from enrollment_routes import _register_enrollment_routes
 from subscriptions_routes import _register_subscription_routes
 from receipt_routes import _register_receipt_routes
 from list_routes import _register_list_routes
@@ -56,6 +58,8 @@ from certificate_routes import _register_certificate_routes
 from groups_routes import _register_group_routes
 from plans_routes import _register_plan_routes
 from users_routes import _register_user_routes
+from profile_and_errors import _register_profile_routes
+from role_dashboard import _register_role_dashboard_routes
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +83,9 @@ def create_app(config_name: str = "development") -> Flask:
     db.init_app(app)
     _init_login_manager(app)
     _register_auth_routes(app)
-    _register_dashboard_routes(app)
+    _register_role_dashboard_routes(app)
+    _register_payment_routes(app)
+    _register_enrollment_routes(app)
     _register_subscription_routes(app)
     _register_receipt_routes(app)
     _register_list_routes(app)
@@ -87,6 +93,7 @@ def create_app(config_name: str = "development") -> Flask:
     _register_group_routes(app)
     _register_plan_routes(app)
     _register_user_routes(app)
+    _register_profile_routes(app)
     _register_core_routes(app)
 
     with app.app_context():
@@ -110,7 +117,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG                   = True
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///shyfra_academy_dev.db")
+    SQLALCHEMY_DATABASE_URI = "mysql+pymysql://root:mysql2003@localhost/shyfra_academy"
     SQLALCHEMY_ECHO         = False   # set True to log SQL to console
 
 
@@ -273,118 +280,7 @@ def _register_auth_routes(app: Flask) -> None:
         return redirect(url_for("login"))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Dashboard Route  (protected)
-# ─────────────────────────────────────────────────────────────────────────────
 
-def _register_dashboard_routes(app: Flask) -> None:
-
-    @app.route("/")
-    @app.route("/dashboard")
-    @login_required                      # ← blocks unauthenticated requests
-    def dashboard():
-        """
-        Main dashboard — fetches all KPI statistics and renders dashboard.html.
-        Accessible by Admin and Supervisor; Members see a limited version
-        (role-gating via template, full blueprint separation comes later).
-        """
-        today       = date.today()
-        month_start = today.replace(day=1)
-        EXPIRY_ALERT_DAYS = 15
-
-        # ── Stat card queries ─────────────────────────────────────────────
-        active_monthly: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
-            .filter(
-                Subscription.status == SubscriptionStatusEnum.Active,
-                SubscriptionPlan.duration_months == 1,
-            )
-            .scalar() or 0
-        )
-
-        active_yearly: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
-            .filter(
-                Subscription.status == SubscriptionStatusEnum.Active,
-                SubscriptionPlan.duration_months == 12,
-            )
-            .scalar() or 0
-        )
-
-        total_active    = active_monthly + active_yearly
-        total_expired   = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .filter(Subscription.status == SubscriptionStatusEnum.Expired)
-            .scalar() or 0
-        )
-        total_suspended = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .filter(Subscription.status == SubscriptionStatusEnum.Suspended)
-            .scalar() or 0
-        )
-        total_canceled  = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .filter(Subscription.status == SubscriptionStatusEnum.Canceled)
-            .scalar() or 0
-        )
-
-        renewals_this_month: int = (
-            db.session.query(func.count(PaymentReceipt.receipt_id))
-            .filter(
-                PaymentReceipt.payment_type == PaymentTypeEnum.Renewal,
-                PaymentReceipt.payment_date >= month_start,
-                PaymentReceipt.payment_date <= today,
-            )
-            .scalar() or 0
-        )
-
-        revenue_this_month: float = float(
-            db.session.query(func.coalesce(func.sum(PaymentReceipt.amount_paid), 0))
-            .filter(
-                PaymentReceipt.payment_date >= month_start,
-                PaymentReceipt.payment_date <= today,
-            )
-            .scalar() or 0.0
-        )
-
-        # ── Expiring soon (alert table) ───────────────────────────────────
-        alert_threshold = today + timedelta(days=EXPIRY_ALERT_DAYS)
-        expiring_soon = (
-            db.session.query(
-                Subscription,
-                User.fname,
-                User.lname,
-                User.email,
-                SubscriptionPlan.plan_name,
-            )
-            .join(User,             Subscription.member_id == User.user_id)
-            .join(SubscriptionPlan, Subscription.plan_id   == SubscriptionPlan.plan_id)
-            .filter(
-                Subscription.status   == SubscriptionStatusEnum.Active,
-                Subscription.end_date >= today,
-                Subscription.end_date <= alert_threshold,
-            )
-            .order_by(Subscription.end_date.asc())
-            .all()
-        )
-
-        return render_template(
-            "dashboard.html",
-            active_monthly      = active_monthly,
-            active_yearly       = active_yearly,
-            total_active        = total_active,
-            total_expired       = total_expired,
-            total_suspended     = total_suspended,
-            total_canceled      = total_canceled,
-            renewals_this_month = renewals_this_month,
-            revenue_this_month  = revenue_this_month,
-            expiring_soon       = expiring_soon,
-            alerts_count        = len(expiring_soon),
-            today               = today,
-            EXPIRY_ALERT_DAYS   = EXPIRY_ALERT_DAYS,
-        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

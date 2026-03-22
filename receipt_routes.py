@@ -78,7 +78,7 @@ def _register_receipt_routes(app) -> None:
         # ── Fetch receipt history — single JOIN query ─────────────────────
         #  Order: newest payment first so the most recent receipt is at top.
         receipts = (
-            db.session.query(PaymentReceipt, Subscription, SubscriptionPlan)
+            db.session.query(PaymentReceipt, Subscription, SubscriptionPlan, User)
             .join(
                 Subscription,
                 PaymentReceipt.subscription_id == Subscription.subscription_id,
@@ -87,6 +87,10 @@ def _register_receipt_routes(app) -> None:
                 SubscriptionPlan,
                 Subscription.plan_id == SubscriptionPlan.plan_id,
             )
+            .join(
+                User,
+                Subscription.member_id == User.user_id,
+            )
             .filter(Subscription.member_id == member_id)
             .order_by(PaymentReceipt.payment_date.desc())
             .all()
@@ -94,7 +98,7 @@ def _register_receipt_routes(app) -> None:
 
         # ── Aggregate: total amount paid by this member (all time) ────────
         total_paid: float = sum(
-            float(receipt.amount_paid) for receipt, _, __ in receipts
+            float(receipt.amount_paid) for receipt, _, __, ___ in receipts
         )
 
         return render_template(

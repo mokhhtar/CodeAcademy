@@ -1,0 +1,642 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+profile.html — الملف الشخصي
+File : templates/profile.html
+Extends : base.html
+Route : GET /profile
+Variables: user (current_user passed from route)
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}الملف الشخصي — أكاديمية شيفرة{% endblock %}
+{% block page_title %}الملف الشخصي{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ── Role badge variants ───────────────────────────────────────────── */
+    .badge-role-admin {
+        background: rgba(239, 68, 68, .13);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, .28);
+    }
+
+    .badge-role-supervisor {
+        background: rgba(245, 158, 11, .13);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, .28);
+    }
+
+    .badge-role-member {
+        background: rgba(14, 165, 233, .13);
+        color: #38bdf8;
+        border: 1px solid rgba(14, 165, 233, .28);
+    }
+
+    /* ── Profile avatar ────────────────────────────────────────────────── */
+    .profile-big-avatar {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 800;
+        color: #fff;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 4px var(--surface-card),
+            0 0 0 6px var(--surface-border);
+    }
+
+    .avatar-admin {
+        background: linear-gradient(135deg, #7f1d1d, #ef4444);
+    }
+
+    .avatar-supervisor {
+        background: linear-gradient(135deg, #78350f, #f59e0b);
+    }
+
+    .avatar-member {
+        background: linear-gradient(135deg, #0c4a6e, #0ea5e9);
+    }
+
+    /* ── Info row ──────────────────────────────────────────────────────── */
+    .info-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--surface-border);
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-row-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: rgba(45, 212, 191, .1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .85rem;
+        color: #2dd4bf;
+        flex-shrink: 0;
+    }
+
+    .info-row-label {
+        font-size: .72rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        display: block;
+        margin-bottom: 3px;
+    }
+
+    .info-row-value {
+        font-size: .9rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        word-break: break-all;
+    }
+
+    /* ── Form controls (reuse pattern from other pages) ───────────────── */
+    .form-label-dark {
+        font-size: .78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+
+    .form-label-dark i {
+        color: #2dd4bf;
+        font-size: .72rem;
+    }
+
+    .required-star {
+        color: #f87171;
+        margin-right: 2px;
+    }
+
+    .pw-wrap {
+        position: relative;
+    }
+
+    .form-control-dark {
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        border-radius: 9px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 14px 10px 38px;
+        /* left-pad for eye toggle */
+        width: 100%;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+        direction: ltr;
+        text-align: right;
+    }
+
+    .form-control-dark::placeholder {
+        color: var(--text-muted);
+    }
+
+    .form-control-dark:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .18);
+        background: #0f1f38;
+    }
+
+    .pw-eye {
+        position: absolute;
+        top: 50%;
+        left: 11px;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        padding: 4px;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: color .2s;
+        line-height: 1;
+        z-index: 2;
+    }
+
+    .pw-eye:hover {
+        color: #2dd4bf;
+    }
+
+    /* ── Strength bar ──────────────────────────────────────────────────── */
+    .strength-bar-wrap {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--surface-border);
+        margin-top: 8px;
+        overflow: hidden;
+    }
+
+    .strength-bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        width: 0;
+        transition: width .3s, background .3s;
+    }
+
+    .strength-label {
+        font-size: .7rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+        min-height: 16px;
+    }
+
+    /* ── Account stats chips ───────────────────────────────────────────── */
+    .stat-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 12px 18px;
+        border-radius: 10px;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        flex: 1;
+        min-width: 90px;
+    }
+
+    .stat-chip-val {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    .stat-chip-lbl {
+        font-size: .7rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Section divider ───────────────────────────────────────────────── */
+    .section-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-muted);
+        font-size: .72rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin: 4px 0 18px;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--surface-border);
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
+<div class="page-header">
+    <h1 class="page-title">
+        <i class="fa-solid fa-circle-user me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+        الملف الشخصي
+    </h1>
+    <p class="page-subtitle">معلومات حسابك وإعدادات الأمان</p>
+</div>
+
+{# ── Role mapping ─────────────────────────────────────────────────────────── #}
+{% if user.role.value == 'Admin' %}
+{% set role_ar = 'مدير النظام' %}
+{% set role_badge = 'badge-role-admin' %}
+{% set role_icon = 'fa-shield-halved' %}
+{% set avatar_cls = 'avatar-admin' %}
+{% elif user.role.value == 'Supervisor' %}
+{% set role_ar = 'مدرب / مشرف' %}
+{% set role_badge = 'badge-role-supervisor' %}
+{% set role_icon = 'fa-chalkboard-user' %}
+{% set avatar_cls = 'avatar-supervisor' %}
+{% else %}
+{% set role_ar = 'طالب' %}
+{% set role_badge = 'badge-role-member' %}
+{% set role_icon = 'fa-graduation-cap' %}
+{% set avatar_cls = 'avatar-member' %}
+{% endif %}
+
+<div class="row g-4">
+
+    {# ══════════════════════════════════════════════════════════════════════
+    LEFT COLUMN — Account Info
+    ══════════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 col-lg-5">
+
+        {# ── Profile card ─────────────────────────────────────────────────── #}
+        <div class="content-card mb-4" role="region" aria-label="معلومات الحساب">
+
+            {# Avatar + name hero #}
+            <div class="d-flex align-items-center gap-4 mb-4 pb-4"
+                style="border-bottom:1px solid var(--surface-border);">
+                <div class="profile-big-avatar {{ avatar_cls }}" aria-hidden="true" title="{{ user.full_name }}">
+                    {{ user.fname[0] | upper }}
+                </div>
+                <div>
+                    <div style="font-size:1.15rem;font-weight:800;
+                      color:var(--text-primary);line-height:1.2;">
+                        {{ user.fname }} {{ user.lname }}
+                    </div>
+                    <div style="margin-top:6px;">
+                        <span class="badge badge-custom {{ role_badge }}" aria-label="الدور: {{ role_ar }}">
+                            <i class="fa-solid {{ role_icon }}" style="font-size:.6rem;margin-left:4px;"
+                                aria-hidden="true"></i>
+                            {{ role_ar }}
+                        </span>
+                    </div>
+                    <div style="font-size:.72rem;color:var(--text-muted);
+                      margin-top:5px;font-family:var(--font-mono);">
+                        UID-{{ "%05d" % user.user_id }}
+                    </div>
+                </div>
+            </div>
+
+            {# Info rows #}
+            <div role="list" aria-label="تفاصيل الحساب">
+
+                <div class="info-row" role="listitem">
+                    <div class="info-row-icon" aria-hidden="true">
+                        <i class="fa-solid fa-envelope"></i>
+                    </div>
+                    <div>
+                        <span class="info-row-label">البريد الإلكتروني</span>
+                        <span class="info-row-value" style="font-family:var(--font-mono);font-size:.82rem;">
+                            {{ user.email }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="info-row" role="listitem">
+                    <div class="info-row-icon" aria-hidden="true">
+                        <i class="fa-solid fa-calendar-plus"></i>
+                    </div>
+                    <div>
+                        <span class="info-row-label">تاريخ الانضمام</span>
+                        <span class="info-row-value" style="font-family:var(--font-mono);">
+                            {{ user.created_at.strftime('%Y-%m-%d') }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="info-row" role="listitem">
+                    <div class="info-row-icon" aria-hidden="true">
+                        <i class="fa-solid fa-circle-dot"></i>
+                    </div>
+                    <div>
+                        <span class="info-row-label">حالة الحساب</span>
+                        <span class="info-row-value">
+                            {% if user.is_active %}
+                            <span style="color:#34d399;">
+                                <i class="fa-solid fa-circle"
+                                    style="font-size:.55rem;vertical-align:middle;margin-left:5px;"
+                                    aria-hidden="true"></i>
+                                نشط
+                            </span>
+                            {% else %}
+                            <span style="color:#94a3b8;">
+                                <i class="fa-solid fa-circle"
+                                    style="font-size:.55rem;vertical-align:middle;margin-left:5px;"
+                                    aria-hidden="true"></i>
+                                غير نشط
+                            </span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        {# ── Quick stats chips ─────────────────────────────────────────────── #}
+        {% if user.is_member %}
+        <div class="content-card" role="region" aria-label="إحصائيات الطالب">
+            <h2 class="content-card-title mb-3" style="font-size:.85rem;">
+                <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+                إحصائياتي
+            </h2>
+            <div class="d-flex gap-3 flex-wrap">
+                <div class="stat-chip">
+                    <span class="stat-chip-val">
+                        {{ user.subscriptions.count() }}
+                    </span>
+                    <span class="stat-chip-lbl">اشتراك</span>
+                </div>
+                <div class="stat-chip">
+                    <span class="stat-chip-val">
+                        {{ user.certificates.count() }}
+                    </span>
+                    <span class="stat-chip-lbl">شهادة</span>
+                </div>
+                <div class="stat-chip">
+                    <span class="stat-chip-val">
+                        {{ user.group_memberships.count() }}
+                    </span>
+                    <span class="stat-chip-lbl">مجموعة</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>{# /col left #}
+
+
+    {# ══════════════════════════════════════════════════════════════════════
+    RIGHT COLUMN — Change Password
+    ══════════════════════════════════════════════════════════════════════ #}
+    <div class="col-12 col-lg-7">
+        <div class="content-card" role="region" aria-label="تغيير كلمة المرور">
+
+            <div class="content-card-header">
+                <h2 class="content-card-title">
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                    تغيير كلمة المرور
+                </h2>
+            </div>
+
+            <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:24px;">
+                اختر كلمة مرور قوية تتضمن أحرفاً كبيرة وصغيرة وأرقاماً ورموزاً.
+                لا تشاركها مع أي شخص.
+            </p>
+
+            <form method="POST" action="{{ url_for('change_password') }}" id="changePwForm" novalidate
+                aria-label="نموذج تغيير كلمة المرور">
+
+                <div class="d-flex flex-column gap-4">
+
+                    {# Current password #}
+                    <div>
+                        <label class="form-label-dark" for="current_password">
+                            <i class="fa-solid fa-lock-open" aria-hidden="true"></i>
+                            كلمة المرور الحالية
+                            <span class="required-star" aria-hidden="true">*</span>
+                        </label>
+                        <div class="pw-wrap">
+                            <input type="password" id="current_password" name="current_password"
+                                class="form-control-dark" placeholder="••••••••" autocomplete="current-password"
+                                required aria-required="true" />
+                            <button type="button" class="pw-eye" data-target="current_password"
+                                aria-label="إظهار كلمة المرور الحالية" aria-pressed="false">
+                                <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="section-divider" aria-hidden="true">
+                        كلمة المرور الجديدة
+                    </div>
+
+                    {# New password + strength meter #}
+                    <div>
+                        <label class="form-label-dark" for="new_password">
+                            <i class="fa-solid fa-key" aria-hidden="true"></i>
+                            كلمة المرور الجديدة
+                            <span class="required-star" aria-hidden="true">*</span>
+                        </label>
+                        <div class="pw-wrap">
+                            <input type="password" id="new_password" name="new_password" class="form-control-dark"
+                                placeholder="••••••••" autocomplete="new-password" minlength="8" required
+                                aria-required="true" aria-describedby="strengthLabel" />
+                            <button type="button" class="pw-eye" data-target="new_password"
+                                aria-label="إظهار كلمة المرور الجديدة" aria-pressed="false">
+                                <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        {# Password strength bar #}
+                        <div class="strength-bar-wrap" aria-hidden="true">
+                            <div class="strength-bar-fill" id="strengthBar"></div>
+                        </div>
+                        <div class="strength-label" id="strengthLabel" aria-live="polite" aria-atomic="true"></div>
+                    </div>
+
+                    {# Confirm new password #}
+                    <div>
+                        <label class="form-label-dark" for="confirm_password">
+                            <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+                            تأكيد كلمة المرور الجديدة
+                            <span class="required-star" aria-hidden="true">*</span>
+                        </label>
+                        <div class="pw-wrap">
+                            <input type="password" id="confirm_password" name="confirm_password"
+                                class="form-control-dark" placeholder="••••••••" autocomplete="new-password" required
+                                aria-required="true" aria-describedby="matchHint" />
+                            <button type="button" class="pw-eye" data-target="confirm_password"
+                                aria-label="إظهار تأكيد كلمة المرور" aria-pressed="false">
+                                <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div id="matchHint" style="font-size:.7rem;margin-top:5px;min-height:16px;" aria-live="polite">
+                        </div>
+                    </div>
+
+                    {# Rules reminder #}
+                    <ul style="list-style:none;padding:0;margin:0;
+                     display:flex;flex-direction:column;gap:5px;">
+                        {% for rule in [
+                        ('fa-check', '8 أحرف على الأقل', 'rule-len'),
+                        ('fa-check', 'حرف كبير واحد على الأقل', 'rule-upper'),
+                        ('fa-check', 'رقم واحد على الأقل', 'rule-num'),
+                        ] %}
+                        <li id="{{ rule[2] }}" style="font-size:.75rem;color:var(--text-muted);
+                       display:flex;align-items:center;gap:7px;
+                       transition:color .2s;">
+                            <i class="fa-solid {{ rule[0] }}" style="font-size:.65rem;" aria-hidden="true"></i>
+                            {{ rule[1] }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+
+                    {# Submit #}
+                    <button type="submit" class="btn btn-accent w-100" style="padding:12px;" id="submitBtn">
+                        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>
+                        حفظ كلمة المرور الجديدة
+                    </button>
+
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+</div>{# /.row #}
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* ── 1. Password show / hide for all three fields ────────────────── */
+        document.querySelectorAll('.pw-eye').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const target = document.getElementById(btn.dataset.target);
+                if (!target) return;
+                const hidden = target.type === 'password';
+                target.type = hidden ? 'text' : 'password';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = hidden
+                    ? 'fa-regular fa-eye-slash'
+                    : 'fa-regular fa-eye';
+                btn.setAttribute('aria-pressed', String(hidden));
+            });
+        });
+
+        /* ── 2. Password strength meter ──────────────────────────────────── */
+        const newPwInput = document.getElementById('new_password');
+        const strengthBar = document.getElementById('strengthBar');
+        const strengthLbl = document.getElementById('strengthLabel');
+        const ruleLen = document.getElementById('rule-len');
+        const ruleUpper = document.getElementById('rule-upper');
+        const ruleNum = document.getElementById('rule-num');
+
+        const TICK_COLOR = '#34d399';
+        const FAIL_COLOR = 'var(--text-muted)';
+
+        function setRule(el, pass) {
+            if (!el) return;
+            el.style.color = pass ? TICK_COLOR : FAIL_COLOR;
+            const ic = el.querySelector('i');
+            if (ic) ic.className = pass
+                ? 'fa-solid fa-check'
+                : 'fa-solid fa-xmark';
+        }
+
+        function calcStrength(pw) {
+            let score = 0;
+            if (pw.length >= 8) score++;
+            if (pw.length >= 12) score++;
+            if (/[A-Z]/.test(pw)) score++;
+            if (/[0-9]/.test(pw)) score++;
+            if (/[^A-Za-z0-9]/.test(pw)) score++;
+            return score;   // 0 – 5
+        }
+
+        if (newPwInput) {
+            newPwInput.addEventListener('input', function () {
+                const pw = newPwInput.value;
+                const score = calcStrength(pw);
+
+                setRule(ruleLen, pw.length >= 8);
+                setRule(ruleUpper, /[A-Z]/.test(pw));
+                setRule(ruleNum, /[0-9]/.test(pw));
+
+                const pct = Math.min(score / 5 * 100, 100);
+                const color = score <= 1 ? '#f87171'
+                    : score <= 3 ? '#fbbf24'
+                        : '#34d399';
+                const label = score === 0 ? ''
+                    : score <= 1 ? 'ضعيفة جداً'
+                        : score <= 2 ? 'ضعيفة'
+                            : score <= 3 ? 'متوسطة'
+                                : score <= 4 ? 'قوية'
+                                    : 'قوية جداً ✅';
+
+                if (strengthBar) {
+                    strengthBar.style.width = pct + '%';
+                    strengthBar.style.background = color;
+                }
+                if (strengthLbl) {
+                    strengthLbl.textContent = label;
+                    strengthLbl.style.color = color;
+                }
+
+                checkMatch();
+            });
+        }
+
+        /* ── 3. Confirm password match hint ─────────────────────────────── */
+        const confirmInput = document.getElementById('confirm_password');
+        const matchHint = document.getElementById('matchHint');
+
+        function checkMatch() {
+            if (!confirmInput || !matchHint || !newPwInput) return;
+            if (!confirmInput.value) {
+                matchHint.textContent = '';
+                return;
+            }
+            const match = newPwInput.value === confirmInput.value;
+            matchHint.textContent = match ? '✅ كلمتا المرور متطابقتان' : '❌ كلمتا المرور غير متطابقتين';
+            matchHint.style.color = match ? '#34d399' : '#f87171';
+        }
+
+        if (confirmInput) {
+            confirmInput.addEventListener('input', checkMatch);
+        }
+
+        /* ── 4. Prevent submit if passwords don't match ──────────────────── */
+        const form = document.getElementById('changePwForm');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                if (newPwInput && confirmInput &&
+                    newPwInput.value !== confirmInput.value) {
+                    e.preventDefault();
+                    if (matchHint) {
+                        matchHint.textContent = '❌ يجب أن تتطابق كلمتا المرور قبل الحفظ';
+                        matchHint.style.color = '#f87171';
+                    }
+                    confirmInput.focus();
+                }
+            });
+        }
+
+    })();
+</script>
+{% endblock %}

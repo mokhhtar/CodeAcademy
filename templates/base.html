@@ -1044,10 +1044,16 @@
             </div>
         </a>
 
-        {# ── Navigation ─────────────────────────────────────────────────────── #}
+        {# ── Navigation — Role-Aware ─────────────────────────────────────────── #}
         <div class="sidebar-nav" role="list">
 
-            {# Section: الرئيسية #}
+            {% if current_user is defined and current_user.is_authenticated %}
+
+            {# ══════════════════════════════════════════════════════════════════
+            ① ADMIN — Full access to everything
+            ══════════════════════════════════════════════════════════════════ #}
+            {% if current_user.role.value == 'Admin' %}
+
             <div class="nav-section-label" aria-hidden="true">الرئيسية</div>
 
             <a href="{{ url_for('dashboard') }}"
@@ -1057,63 +1063,155 @@
                 <span class="nav-label">لوحة التحكم</span>
             </a>
 
-            {# Section: إدارة الأشخاص #}
             <div class="nav-section-label" aria-hidden="true">إدارة الأشخاص</div>
 
-            <a href="{{ url_for('users') }}"
-                class="nav-item-link {% if request.endpoint and request.endpoint.startswith('users') %}active{% endif %}"
+            <a href="{{ url_for('users') }}" class="nav-item-link {% if request.endpoint == 'users' %}active{% endif %}"
                 role="listitem">
                 <i class="fa-solid fa-users nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">المستخدمون</span>
             </a>
 
-            <a href="{{ url_for('groups') }}" class=" nav-item-link {% if request.endpoint and request.endpoint.startswith('groups') %}active{% endif
-                %}" role="listitem">
+            <a href="{{ url_for('groups') }}"
+                class="nav-item-link {% if request.endpoint == 'groups' %}active{% endif %}" role="listitem">
                 <i class="fa-solid fa-layer-group nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">المجموعات</span>
             </a>
 
-            {# Section: الاشتراكات المالية #}
             <div class="nav-section-label" aria-hidden="true">الاشتراكات المالية</div>
 
             <a href="{{ url_for('subscriptions') }}"
-                class=" nav-item-link {% if request.endpoint and request.endpoint.startswith('subscriptions') %}active{% endif %} "
-                role="listitem">
+                class="nav-item-link {% if request.endpoint == 'subscriptions' %}active{% endif %}" role="listitem">
                 <i class="fa-solid fa-id-card nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">الاشتراكات</span>
             </a>
 
-            <a href="{{ url_for('plans') }}"
-                class="nav-item-link {% if request.endpoint and request.endpoint.startswith('plans') %}active{% endif %}"
+            <a href="{{ url_for('plans') }}" class="nav-item-link {% if request.endpoint == 'plans' %}active{% endif %}"
                 role="listitem">
                 <i class="fa-solid fa-tags nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">خطط الاشتراك</span>
             </a>
 
             <a href="{{ url_for('all_receipts') }}"
-                class="nav-item-link {% if request.endpoint and request.endpoint.startswith('receipts') %}active{% endif %}"
-                role="listitem">
+                class="nav-item-link {% if request.endpoint == 'all_receipts' %}active{% endif %}" role="listitem">
                 <i class="fa-solid fa-receipt nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">الإيصالات</span>
             </a>
 
-            {# Section: الشهادات #}
             <div class="nav-section-label" aria-hidden="true">أخرى</div>
 
-            <a href="{{ url_for('certificates') }}" class=" nav-item-link {% if request.endpoint and request.endpoint.startswith('certificates') %}active{%
-                endif %}" role="listitem">
+            <a href="{{ url_for('certificates') }}"
+                class="nav-item-link {% if request.endpoint == 'certificates' %}active{% endif %}" role="listitem">
                 <i class="fa-solid fa-certificate nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">الشهادات</span>
             </a>
 
-            {# Admin-only items — wrap with role check in real routes #}
-            {% if current_user is defined and current_user.is_authenticated and current_user.is_admin %}
             <a href="{{ url_for('db_stats') }}"
                 class="nav-item-link {% if request.endpoint == 'db_stats' %}active{% endif %}" role="listitem">
                 <i class="fa-solid fa-database nav-icon" aria-hidden="true"></i>
                 <span class="nav-label">إحصائيات النظام</span>
             </a>
-            {% endif %}
+
+            {# ══════════════════════════════════════════════════════════════════
+            ② SUPERVISOR — Groups + Students only
+            ══════════════════════════════════════════════════════════════════ #}
+            {% elif current_user.role.value == 'Supervisor' %}
+
+            <div class="nav-section-label" aria-hidden="true">الرئيسية</div>
+
+            <a href="{{ url_for('dashboard') }}"
+                class="nav-item-link {% if request.endpoint == 'dashboard' %}active{% endif %}" role="listitem"
+                aria-current="{% if request.endpoint == 'dashboard' %}page{% endif %}">
+                <i class="fa-solid fa-gauge-high nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">لوحة التحكم</span>
+            </a>
+
+            <div class="nav-section-label" aria-hidden="true">إدارتي</div>
+
+            <a href="{{ url_for('groups') }}"
+                class="nav-item-link {% if request.endpoint == 'groups' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-layer-group nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">مجموعاتي</span>
+            </a>
+
+            <a href="{{ url_for('subscriptions') }}"
+                class="nav-item-link {% if request.endpoint == 'subscriptions' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-users nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">طلابي</span>
+            </a>
+
+            <div class="nav-section-label" aria-hidden="true">أخرى</div>
+
+            <a href="{{ url_for('certificates') }}"
+                class="nav-item-link {% if request.endpoint == 'certificates' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-certificate nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">الشهادات</span>
+            </a>
+
+            <a href="{{ url_for('profile') }}"
+                class="nav-item-link {% if request.endpoint == 'profile' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-circle-user nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">الملف الشخصي</span>
+            </a>
+
+            {# ══════════════════════════════════════════════════════════════════
+            ③ MEMBER — Personal account view only
+            ══════════════════════════════════════════════════════════════════ #}
+            {% elif current_user.role.value == 'Member' %}
+
+            <div class="nav-section-label" aria-hidden="true">الرئيسية</div>
+
+            <a href="{{ url_for('dashboard') }}"
+                class="nav-item-link {% if request.endpoint == 'dashboard' %}active{% endif %}" role="listitem"
+                aria-current="{% if request.endpoint == 'dashboard' %}page{% endif %}">
+                <i class="fa-solid fa-gauge-high nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">لوحة التحكم</span>
+            </a>
+
+            <div class="nav-section-label" aria-hidden="true">حسابي</div>
+
+            <a href="{{ url_for('subscriptions') }}"
+                class="nav-item-link {% if request.endpoint == 'subscriptions' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-id-card nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">اشتراكاتي</span>
+            </a>
+
+            <a href="{{ url_for('member_receipts', member_id=current_user.user_id) }}"
+                class="nav-item-link {% if request.endpoint == 'member_receipts' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-receipt nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">إيصالاتي</span>
+            </a>
+
+            <a href="{{ url_for('certificates') }}"
+                class="nav-item-link {% if request.endpoint == 'certificates' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-certificate nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">شهاداتي</span>
+            </a>
+
+            <div class="nav-section-label" aria-hidden="true">الأكاديمية</div>
+
+            <a href="{{ url_for('plans') }}" class="nav-item-link {% if request.endpoint == 'plans' %}active{% endif %}"
+                role="listitem">
+                <i class="fa-solid fa-tags nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">خطط الاشتراك</span>
+            </a>
+
+            <a href="{{ url_for('courses') }}"
+                class="nav-item-link {% if request.endpoint == 'courses' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-graduation-cap nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">مساراتي</span>
+            </a>
+
+            <div class="nav-section-label" aria-hidden="true">الحساب</div>
+
+            <a href="{{ url_for('profile') }}"
+                class="nav-item-link {% if request.endpoint == 'profile' %}active{% endif %}" role="listitem">
+                <i class="fa-solid fa-circle-user nav-icon" aria-hidden="true"></i>
+                <span class="nav-label">الملف الشخصي</span>
+            </a>
+
+            {% endif %}{# end role switch #}
+
+            {% endif %}{# end is_authenticated #}
 
         </div>{# /.sidebar-nav #}
 
@@ -1126,7 +1224,11 @@
                 </div>
                 <div class="sidebar-user-info">
                     <div class="sidebar-user-name">{{ current_user.full_name }}</div>
-                    <div class="sidebar-user-role">{{ current_user.role.value }}</div>
+                    <div class="sidebar-user-role">
+                        {% if current_user.role.value == 'Admin' %}مدير
+                        {% elif current_user.role.value == 'Supervisor' %}مدرب
+                        {% else %}طالب{% endif %}
+                    </div>
                 </div>
             </div>
             {% else %}
@@ -1195,10 +1297,10 @@
                         </span>
                         <span class="profile-role">
                             {% if current_user is defined and current_user.is_authenticated %}
-                            {{ current_user.role.value }}
-                            {% else %}
-                            —
-                            {% endif %}
+                            {% if current_user.role.value == 'Admin' %}مدير
+                            {% elif current_user.role.value == 'Supervisor' %}مدرب
+                            {% else %}طالب{% endif %}
+                            {% else %}—{% endif %}
                         </span>
                     </div>
 

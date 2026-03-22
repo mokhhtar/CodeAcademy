@@ -438,11 +438,13 @@ edit_group Group | undefined (present when editing)
     </div>
 
     {# New Group button → triggers Add modal #}
+    {% if current_user.is_admin %}
     <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
         data-bs-toggle="modal" data-bs-target="#addGroupModal" aria-label="إنشاء مجموعة جديدة">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         مجموعة جديدة
     </button>
+    {% endif %}
 </div>
 
 {# ── Summary banner ──────────────────────────────────────────────────────── #}
@@ -517,7 +519,9 @@ MAIN CONTENT CARD
                         تاريخ الإنشاء
                         <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
                     </th>
+                    {% if current_user.is_admin %}
                     <th scope="col" class="text-center" style="width:130px;">إجراءات</th>
+                    {% endif %}
                 </tr>
             </thead>
 
@@ -579,6 +583,7 @@ MAIN CONTENT CARD
                     </td>
 
                     {# Actions #}
+                    {% if current_user.is_admin %}
                     <td class="text-center">
                         <div class="d-flex align-items-center justify-content-center gap-2">
 
@@ -603,6 +608,7 @@ MAIN CONTENT CARD
 
                         </div>
                     </td>
+                    {% endif %}
 
                 </tr>
                 {% else %}
@@ -613,10 +619,12 @@ MAIN CONTENT CARD
                         </span>
                         لا توجد مجموعات بعد.
                         <br />
+                        {% if current_user.is_admin %}
                         <button type="button" data-bs-toggle="modal" data-bs-target="#addGroupModal" style="color:#2dd4bf;background:none;border:none;
                            cursor:pointer;font-size:.85rem;margin-top:8px;">
                             أنشئ أول مجموعة الآن
                         </button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

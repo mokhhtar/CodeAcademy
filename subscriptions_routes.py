@@ -82,6 +82,10 @@ def _register_subscription_routes(app) -> None:
             .join(SubscriptionPlan, Subscription.plan_id   == SubscriptionPlan.plan_id)
         )
 
+        # ── Member isolation: students only see their own subscriptions ───
+        if current_user.is_member:
+            query = query.filter(Subscription.member_id == current_user.user_id)
+
         # ── Optional: filter by status ────────────────────────────────────
         if status_filter:
             try:

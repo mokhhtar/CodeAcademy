@@ -1,0 +1,810 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+courses.html — استكشاف المسارات والانضمام إليها
+Extends : base.html
+Route : GET /courses (Member only)
+Variables: all_groups list[(Group, supervisor_name|None)]
+enrolled_group_ids set[int]
+════════════════════════════════════════════════════════════════════════════ #}
+
+{% block title %}استكشاف المسارات — أكاديمية شيفرة{% endblock %}
+{% block page_title %}المسارات التعليمية{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* ═══════════════════════════════════════════════════════════════════════
+     COURSE CARDS GRID
+  ═══════════════════════════════════════════════════════════════════════ */
+    .course-card {
+        background: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        transition: border-color .25s, transform .25s, box-shadow .25s;
+        position: relative;
+    }
+
+    .course-card:hover {
+        border-color: rgba(45, 212, 191, .35);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
+    }
+
+    .course-card.enrolled-card {
+        border-color: rgba(45, 212, 191, .3);
+        background: linear-gradient(160deg,
+                rgba(45, 212, 191, .06) 0%,
+                var(--surface-card) 60%);
+    }
+
+    /* ── Card colour band ─────────────────────────────────────────────── */
+    .course-band {
+        height: 5px;
+        flex-shrink: 0;
+    }
+
+    .band-teal {
+        background: linear-gradient(90deg, #2dd4bf, #0f9488);
+    }
+
+    .band-indigo {
+        background: linear-gradient(90deg, #818cf8, #4f46e5);
+    }
+
+    .band-amber {
+        background: linear-gradient(90deg, #fbbf24, #d97706);
+    }
+
+    .band-rose {
+        background: linear-gradient(90deg, #f87171, #dc2626);
+    }
+
+    .band-emerald {
+        background: linear-gradient(90deg, #34d399, #059669);
+    }
+
+    .band-sky {
+        background: linear-gradient(90deg, #38bdf8, #0284c7);
+    }
+
+    /* ── Card icon ─────────────────────────────────────────────────────── */
+    .course-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+        margin-bottom: 14px;
+    }
+
+    .icon-teal {
+        background: rgba(45, 212, 191, .12);
+        color: #2dd4bf;
+    }
+
+    .icon-indigo {
+        background: rgba(129, 140, 248, .12);
+        color: #818cf8;
+    }
+
+    .icon-amber {
+        background: rgba(251, 191, 36, .12);
+        color: #fbbf24;
+    }
+
+    .icon-rose {
+        background: rgba(248, 113, 113, .12);
+        color: #f87171;
+    }
+
+    .icon-emerald {
+        background: rgba(52, 211, 153, .12);
+        color: #34d399;
+    }
+
+    .icon-sky {
+        background: rgba(56, 189, 248, .12);
+        color: #38bdf8;
+    }
+
+    /* ── Card body ─────────────────────────────────────────────────────── */
+    .course-body {
+        padding: 20px 20px 16px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .course-name {
+        font-size: .95rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        line-height: 1.3;
+    }
+
+    .course-desc {
+        font-size: .8rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+        flex: 1;
+        margin-bottom: 14px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* ── Course meta chips ─────────────────────────────────────────────── */
+    .course-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-bottom: 16px;
+    }
+
+    .meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: .7rem;
+        font-weight: 600;
+        background: var(--surface-bg);
+        border: 1px solid var(--surface-border);
+        color: var(--text-muted);
+    }
+
+    .meta-chip i {
+        font-size: .65rem;
+    }
+
+    /* ── Supervisor chip ───────────────────────────────────────────────── */
+    .sup-chip-mini {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .sup-avatar-mini {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #1e3a5f, #818cf8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .62rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .sup-name-mini {
+        font-size: .75rem;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    .sup-role-mini {
+        font-size: .65rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Card footer ───────────────────────────────────────────────────── */
+    .course-footer {
+        padding: 14px 20px;
+        border-top: 1px solid var(--surface-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .member-count-mini {
+        font-size: .72rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .member-count-mini i {
+        color: #2dd4bf;
+    }
+
+    /* ── Join button ───────────────────────────────────────────────────── */
+    .btn-join {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 18px;
+        border-radius: 8px;
+        font-size: .78rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #2dd4bf, #0f9488);
+        color: #0f172a;
+        border: none;
+        cursor: pointer;
+        font-family: var(--font-arabic);
+        transition: opacity .2s, transform .15s, box-shadow .2s;
+        white-space: nowrap;
+    }
+
+    .btn-join:hover {
+        opacity: .9;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(45, 212, 191, .3);
+    }
+
+    /* ── Enrolled state badge ──────────────────────────────────────────── */
+    .enrolled-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: .78rem;
+        font-weight: 700;
+        background: rgba(45, 212, 191, .1);
+        border: 1px solid rgba(45, 212, 191, .25);
+        color: #2dd4bf;
+        white-space: nowrap;
+    }
+
+    /* ── "Already enrolled" ribbon ────────────────────────────────────── */
+    .enrolled-ribbon {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        background: rgba(45, 212, 191, .15);
+        border: 1px solid rgba(45, 212, 191, .3);
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: .62rem;
+        font-weight: 700;
+        color: #2dd4bf;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     HERO / STATS BANNER
+  ═══════════════════════════════════════════════════════════════════════ */
+    .courses-hero {
+        background: linear-gradient(135deg, #0f1f38 0%, #1e3a5f 50%, #0f172a 100%);
+        border: 1px solid var(--surface-border);
+        border-radius: 16px;
+        padding: 28px 32px;
+        margin-bottom: 28px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .courses-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 80% 50%,
+                rgba(45, 212, 191, .07) 0%, transparent 60%);
+        pointer-events: none;
+    }
+
+    .courses-hero-title {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+    }
+
+    .courses-hero-sub {
+        font-size: .875rem;
+        color: var(--text-muted);
+        margin: 0;
+    }
+
+    .hero-stat {
+        text-align: center;
+        padding: 14px 20px;
+        background: rgba(255, 255, 255, .04);
+        border: 1px solid rgba(255, 255, 255, .06);
+        border-radius: 12px;
+    }
+
+    .hero-stat-val {
+        font-size: 1.6rem;
+        font-weight: 900;
+        color: #2dd4bf;
+        line-height: 1;
+        margin-bottom: 3px;
+    }
+
+    .hero-stat-lbl {
+        font-size: .72rem;
+        color: var(--text-muted);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     SEARCH & FILTER BAR
+  ═══════════════════════════════════════════════════════════════════════ */
+    .courses-toolbar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .search-wrap-courses {
+        position: relative;
+        flex: 1;
+        min-width: 200px;
+        max-width: 360px;
+    }
+
+    .search-icon-courses {
+        position: absolute;
+        top: 50%;
+        right: 13px;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: .85rem;
+        pointer-events: none;
+    }
+
+    .search-input-courses {
+        width: 100%;
+        background: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        color: var(--text-primary);
+        font-family: var(--font-arabic);
+        font-size: .875rem;
+        padding: 10px 38px 10px 14px;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        caret-color: #2dd4bf;
+    }
+
+    .search-input-courses::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-input-courses:focus {
+        border-color: #2dd4bf;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .15);
+        background: #0f1f38;
+    }
+
+    /* Filter pill buttons */
+    .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 7px 14px;
+        border-radius: 20px;
+        font-size: .78rem;
+        font-weight: 600;
+        border: 1px solid var(--surface-border);
+        background: var(--surface-card);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all .18s;
+    }
+
+    .filter-pill:hover {
+        border-color: #2dd4bf;
+        color: #2dd4bf;
+    }
+
+    .filter-pill.active {
+        background: rgba(45, 212, 191, .12);
+        border-color: rgba(45, 212, 191, .35);
+        color: #2dd4bf;
+    }
+
+    .filter-pill .pill-count {
+        font-size: .65rem;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: rgba(45, 212, 191, .12);
+        color: #2dd4bf;
+    }
+
+    /* Card entrance animation */
+    .course-card-wrap {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    .course-card-wrap.visible {
+        animation: courseReveal .4s cubic-bezier(.34, 1.56, .64, 1) both;
+    }
+
+    @keyframes courseReveal {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Hidden card (JS filter) */
+    .course-card-wrap.card-hidden {
+        display: none !important;
+    }
+
+    /* Empty search state */
+    .no-courses-msg {
+        display: none;
+        grid-column: 1/-1;
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+
+    .no-courses-msg i {
+        font-size: 2.5rem;
+        opacity: .3;
+        display: block;
+        margin-bottom: 14px;
+    }
+
+    @media (max-width: 575px) {
+        .courses-hero {
+            padding: 20px 18px;
+        }
+
+        .hero-stat-val {
+            font-size: 1.3rem;
+        }
+
+        .courses-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .search-wrap-courses {
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+{# ── Compute quick stats from template variables ──────────────────────────── #}
+{% set total_courses = all_groups | length %}
+{% set enrolled_count = enrolled_group_ids | length %}
+{% set available_count = total_courses - enrolled_count %}
+
+{# ── Hero banner ─────────────────────────────────────────────────────────── #}
+<div class="courses-hero" role="banner" aria-label="صفحة استكشاف المسارات">
+    <div class="row align-items-center g-4">
+        <div class="col-12 col-md-7" style="position:relative;z-index:1;">
+            <h1 class="courses-hero-title">
+                <i class="fa-solid fa-graduation-cap me-2" style="color:#2dd4bf;" aria-hidden="true"></i>
+                استكشف المسارات التعليمية
+            </h1>
+            <p class="courses-hero-sub">
+                انضم إلى المسارات التي تناسبك وابدأ رحلتك البرمجية مع أكاديمية شيفرة.
+            </p>
+        </div>
+        <div class="col-12 col-md-5" style="position:relative;z-index:1;">
+            <div class="row g-2">
+                <div class="col-4">
+                    <div class="hero-stat" role="status" aria-label="{{ total_courses }} مسار متاح">
+                        <div class="hero-stat-val">{{ total_courses }}</div>
+                        <div class="hero-stat-lbl">مسار متاح</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="hero-stat" role="status" aria-label="{{ enrolled_count }} مسار مسجّل">
+                        <div class="hero-stat-val">{{ enrolled_count }}</div>
+                        <div class="hero-stat-lbl">مسجّل فيه</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="hero-stat" role="status" aria-label="{{ available_count }} مسار لم تنضم">
+                        <div class="hero-stat-val">{{ available_count }}</div>
+                        <div class="hero-stat-lbl">لم تنضم بعد</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Search & filter toolbar ─────────────────────────────────────────────── #}
+<div class="courses-toolbar" role="toolbar" aria-label="شريط البحث والتصفية">
+
+    <div class="search-wrap-courses">
+        <input type="search" id="coursesSearch" class="search-input-courses" placeholder="ابحث عن مسار أو مدرب…"
+            autocomplete="off" aria-label="بحث في المسارات" aria-controls="coursesGrid" />
+        <span class="search-icon-courses" aria-hidden="true">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap" role="group" aria-label="تصفية المسارات">
+        <button type="button" class="filter-pill active" data-filter="all" aria-pressed="true">
+            الكل
+            <span class="pill-count">{{ total_courses }}</span>
+        </button>
+        <button type="button" class="filter-pill" data-filter="enrolled" aria-pressed="false">
+            <i class="fa-solid fa-circle-check" style="color:#2dd4bf;" aria-hidden="true"></i>
+            مسجّل فيه
+            <span class="pill-count">{{ enrolled_count }}</span>
+        </button>
+        <button type="button" class="filter-pill" data-filter="available" aria-pressed="false">
+            <i class="fa-solid fa-plus-circle" aria-hidden="true"></i>
+            متاح
+            <span class="pill-count">{{ available_count }}</span>
+        </button>
+    </div>
+
+</div>
+
+{# ── Courses grid ────────────────────────────────────────────────────────── #}
+{# Colour scheme cycles through 6 palette variants #}
+{% set bands = ['band-teal','band-indigo','band-amber','band-rose','band-emerald','band-sky'] %}
+{% set icons = ['icon-teal','icon-indigo','icon-amber','icon-rose','icon-emerald','icon-sky'] %}
+{% set icns = ['fa-code','fa-globe','fa-database','fa-terminal','fa-microchip','fa-layer-group'] %}
+
+{% if all_groups %}
+<div class="row g-4" id="coursesGrid" aria-label="قائمة المسارات التعليمية">
+
+    {% for group, supervisor_name in all_groups %}
+    {% set palette_idx = loop.index0 % 6 %}
+    {% set is_enrolled = group.group_id in enrolled_group_ids %}
+
+    <div class="col-12 col-sm-6 col-xl-4 course-card-wrap" data-delay="{{ loop.index0 * 60 }}"
+        data-enrolled="{{ 'true' if is_enrolled else 'false' }}"
+        data-search="{{ group.group_name }} {{ supervisor_name or '' }}">
+
+        <div class="course-card {% if is_enrolled %}enrolled-card{% endif %}" role="article"
+            aria-label="مسار {{ group.group_name }}{% if is_enrolled %} — مسجّل{% endif %}">
+
+            {# Colour band #}
+            <div class="course-band {{ bands[palette_idx] }}" aria-hidden="true"></div>
+
+            {# Enrolled ribbon #}
+            {% if is_enrolled %}
+            <div class="enrolled-ribbon" aria-label="مسجّل في هذا المسار">
+                <i class="fa-solid fa-check" style="font-size:.55rem;" aria-hidden="true"></i>
+                مسجّل
+            </div>
+            {% endif %}
+
+            {# Card body #}
+            <div class="course-body">
+                <div class="course-icon {{ icons[palette_idx] }}" aria-hidden="true">
+                    <i class="fa-solid {{ icns[palette_idx] }}"></i>
+                </div>
+
+                <h2 class="course-name">{{ group.group_name }}</h2>
+
+                <p class="course-desc">
+                    {% if group.description %}
+                    {{ group.description }}
+                    {% else %}
+                    مسار تعليمي متكامل يغطي المفاهيم الأساسية والتطبيقية في هذا المجال.
+                    {% endif %}
+                </p>
+
+                {# Meta chips #}
+                <div class="course-meta" aria-label="تفاصيل المسار">
+                    <span class="meta-chip">
+                        <i class="fa-solid fa-users" aria-hidden="true"></i>
+                        {{ group.member_count }} طالب
+                    </span>
+                    <span class="meta-chip">
+                        <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                        {{ group.created_at.strftime('%Y') }}
+                    </span>
+                    {% if is_enrolled %}
+                    <span class="meta-chip" style="border-color:rgba(45,212,191,.2);color:#2dd4bf;">
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                        منضم
+                    </span>
+                    {% endif %}
+                </div>
+
+                {# Supervisor info #}
+                {% if supervisor_name %}
+                <div class="sup-chip-mini" aria-label="المدرب: {{ supervisor_name }}">
+                    <div class="sup-avatar-mini" aria-hidden="true">
+                        {{ supervisor_name[0] | upper }}
+                    </div>
+                    <div>
+                        <div class="sup-name-mini">{{ supervisor_name }}</div>
+                        <div class="sup-role-mini">المدرب / المشرف</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="sup-chip-mini" style="opacity:.5;">
+                    <div class="sup-avatar-mini" style="background:var(--surface-border);" aria-hidden="true">
+                        <i class="fa-solid fa-user-slash" style="font-size:.55rem;"></i>
+                    </div>
+                    <div>
+                        <div class="sup-name-mini">غير معيَّن</div>
+                        <div class="sup-role-mini">لا يوجد مدرب بعد</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>{# /.course-body #}
+
+            {# Card footer with Join / Enrolled button #}
+            <div class="course-footer">
+                <div class="member-count-mini" aria-hidden="true">
+                    <i class="fa-solid fa-users"></i>
+                    {{ group.member_count }} طالب مسجَّل
+                </div>
+
+                {% if is_enrolled %}
+                {# Already enrolled — show success state, no form #}
+                <span class="enrolled-badge" aria-label="أنت مسجّل في هذا المسار">
+                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                    مسجّل بالفعل
+                </span>
+
+                {% else %}
+                {# Not enrolled — show join button #}
+                <form method="POST" action="{{ url_for('join_group', group_id=group.group_id) }}"
+                    onsubmit="return confirm('الانضمام إلى مسار:\n{{ group.group_name }}؟')">
+                    <button type="submit" class="btn-join" aria-label="الانضمام إلى مسار {{ group.group_name }}">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        انضم الآن
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+        </div>{# /.course-card #}
+    </div>{# /.col #}
+    {% endfor %}
+
+    {# No-results message (shown by JS when search yields 0) #}
+    <div class="no-courses-msg" id="noCoursesMsg" role="status" aria-live="polite">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        لا توجد مسارات تطابق بحثك.
+        <br />
+        <button onclick="document.getElementById('coursesSearch').value='';filterCourses();" style="color:#2dd4bf;background:none;border:none;cursor:pointer;
+                   font-size:.85rem;margin-top:10px;">
+            مسح البحث وعرض الكل
+        </button>
+    </div>
+
+</div>{# /#coursesGrid #}
+
+{% else %}
+{# Truly empty — no groups created yet #}
+<div style="text-align:center;padding:80px 20px;color:var(--text-muted);">
+    <i class="fa-solid fa-graduation-cap" style="font-size:3rem;opacity:.25;display:block;margin-bottom:18px;"
+        aria-hidden="true"></i>
+    <h2 style="font-size:1.1rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">
+        لا توجد مسارات متاحة بعد
+    </h2>
+    <p style="font-size:.9rem;max-width:320px;margin:0 auto 20px;">
+        لم يتم إنشاء أي مسارات تعليمية حتى الآن. يرجى التواصل مع الإدارة.
+    </p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-accent" style="padding:10px 22px;">
+        <i class="fa-solid fa-arrow-right me-1" aria-hidden="true"></i>
+        العودة للوحة التحكم
+    </a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* ── Cache DOM ───────────────────────────────────────────────────── */
+        var searchInput = document.getElementById('coursesSearch');
+        var noMsg = document.getElementById('noCoursesMsg');
+        var filterBtns = document.querySelectorAll('.filter-pill');
+        var allCards = Array.from(document.querySelectorAll('.course-card-wrap'));
+
+        var currentFilter = 'all';   // 'all' | 'enrolled' | 'available'
+
+        /* ── 1. Card entrance animation (IntersectionObserver) ────────────── */
+        if ('IntersectionObserver' in window) {
+            var io = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        var delay = parseInt(entry.target.dataset.delay || '0', 10);
+                        setTimeout(function () {
+                            entry.target.classList.add('visible');
+                        }, delay);
+                        io.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.08 });
+            allCards.forEach(function (c) { io.observe(c); });
+        } else {
+            allCards.forEach(function (c) { c.classList.add('visible'); });
+        }
+
+        /* ── 2. Combined filter + search function ────────────────────────── */
+        function filterCourses() {
+            var term = searchInput ? searchInput.value.trim().toLowerCase() : '';
+            var filter = currentFilter;
+            var visible = 0;
+
+            allCards.forEach(function (card) {
+                var haystack = (card.dataset.search || '').toLowerCase();
+                var enrolled = card.dataset.enrolled === 'true';
+
+                var matchSearch = !term || haystack.includes(term);
+                var matchFilter = filter === 'all'
+                    || (filter === 'enrolled' && enrolled)
+                    || (filter === 'available' && !enrolled);
+
+                var show = matchSearch && matchFilter;
+                card.classList.toggle('card-hidden', !show);
+                if (show) visible++;
+            });
+
+            if (noMsg) {
+                noMsg.style.display = (visible === 0 && allCards.length > 0) ? 'block' : 'none';
+            }
+        }
+
+        /* ── 3. Search event ─────────────────────────────────────────────── */
+        function debounce(fn, ms) {
+            var t;
+            return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', debounce(filterCourses, 160));
+            searchInput.addEventListener('search', filterCourses);
+        }
+
+        /* ── 4. Filter pill toggle ───────────────────────────────────────── */
+        filterBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                filterBtns.forEach(function (b) {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-pressed', 'false');
+                });
+                this.classList.add('active');
+                this.setAttribute('aria-pressed', 'true');
+                currentFilter = this.dataset.filter;
+                filterCourses();
+            });
+        });
+
+        /* ── 5. Keyboard shortcut: Ctrl/Cmd+F → focus search ────────────── */
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f' &&
+                searchInput && document.activeElement !== searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
+            if (e.key === 'Escape' && searchInput &&
+                document.activeElement === searchInput) {
+                searchInput.value = '';
+                filterCourses();
+            }
+        });
+
+    })();
+</script>
+{% endblock %}
