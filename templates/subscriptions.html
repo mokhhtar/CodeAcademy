@@ -619,9 +619,11 @@ MAIN CONTENT CARD
                         <i class="fa-solid fa-sort sort-icon" aria-hidden="true"></i>
                     </th>
 
+                    {% if current_user.is_admin %}
                     <th scope="col" class="text-center" style="width:110px;">
                         إجراءات
                     </th>
+                    {% endif %}
                 </tr>
             </thead>
 

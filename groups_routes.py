@@ -107,7 +107,6 @@ def _register_group_routes(app) -> None:
 
     @app.route("/groups/add", methods=["POST"])
     @login_required
-    @admin_required
     def add_group():
         """
         Handle the "Add Group" modal form.
@@ -123,6 +122,10 @@ def _register_group_routes(app) -> None:
         supervisor_id = request.form.get("supervisor_id", "").strip()
 
         # ── Validation ────────────────────────────────────────────────────
+        if current_user.is_member:
+            flash("غير مصرح لك بإنشاء مجموعة.", "danger")
+            return redirect(url_for("groups"))
+
         if not group_name:
             flash("اسم المجموعة مطلوب.", "danger")
             return redirect(url_for("groups"))
@@ -136,7 +139,10 @@ def _register_group_routes(app) -> None:
             return redirect(url_for("groups"))
 
         # ── Resolve optional supervisor FK ────────────────────────────────
-        resolved_supervisor_id = int(supervisor_id) if supervisor_id else None
+        if current_user.role == RoleEnum.Supervisor:
+            resolved_supervisor_id = current_user.user_id
+        else:
+            resolved_supervisor_id = int(supervisor_id) if supervisor_id else None
 
         new_group = Group(
             group_name    = group_name,

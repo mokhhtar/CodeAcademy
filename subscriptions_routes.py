@@ -85,7 +85,16 @@ def _register_subscription_routes(app) -> None:
         # ── Member isolation: students only see their own subscriptions ───
         if current_user.is_member:
             query = query.filter(Subscription.member_id == current_user.user_id)
-
+        # ── Supervisor isolation: supervisors only see their students 
+        elif current_user.role == RoleEnum.Supervisor:
+            from models import GroupMember, Group
+            query = (
+                query
+                .join(GroupMember, Subscription.member_id == GroupMember.member_id)
+                .join(Group, Group.group_id == GroupMember.group_id)
+                .filter(Group.supervisor_id == current_user.user_id)
+                .distinct()
+            )
         # ── Optional: filter by status ────────────────────────────────────
         if status_filter:
             try:
@@ -161,8 +170,8 @@ def _register_subscription_routes(app) -> None:
         """
 
         # ── Role guard ────────────────────────────────────────────────────
-        if current_user.is_member:
-            flash("ليس لديك صلاحية لتعديل حالة الاشتراكات.", "danger")
+        if not current_user.is_admin:
+            flash("تعديل الاشتراكات مخصص للإدارة فقط.", "danger")
             return redirect(url_for("subscriptions"))
 
         # ── Validate new_status against allowlist ─────────────────────────
@@ -256,8 +265,8 @@ def _register_subscription_routes(app) -> None:
         """
 
         # ── Role guard ────────────────────────────────────────────────────
-        if current_user.is_member:
-            flash("ليس لديك صلاحية لتجديد الاشتراكات.", "danger")
+        if not current_user.is_admin:
+            flash("تجديد الاشتراكات مخصص للإدارة فقط.", "danger")
             return redirect(url_for("subscriptions"))
 
         # ── Fetch subscription + plan in one query ────────────────────────

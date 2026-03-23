@@ -1393,8 +1393,8 @@ STUDENTS TABLE
             <div class="content-card-header">
                 <h2 class="content-card-title"><i class="fa-solid fa-graduation-cap"></i> مساراتي المسجَّلة</h2>
             </div>
-            {% if member_groups %}
-            {% for group in member_groups %}
+            {% if enrolled_groups %}
+            {% for group in enrolled_groups %}
             <div class="enrolled-group-card {% if not loop.last %}mb-3{% endif %}">
                 <div class="enrolled-group-name">
                     <i class="fa-solid fa-layer-group me-2" style="color:#2dd4bf;font-size:.85rem;"></i>{{

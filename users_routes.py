@@ -4,7 +4,7 @@
 # =============================================================================
 
 from flask import render_template, request, flash, redirect, url_for
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from models import User, RoleEnum, UserStatusEnum, db
 from groups_routes import admin_required
@@ -19,7 +19,6 @@ def _register_user_routes(app) -> None:
 
     @app.route("/users", methods=["GET"])
     @login_required
-    @admin_required
     def users():
         """
         Render the users management page.
@@ -28,11 +27,30 @@ def _register_user_routes(app) -> None:
         ──────────────────
         users   list[User]  — all users, ordered by role then name
         """
-        all_users = (
-            User.query
-            .order_by(User.role.asc(), User.fname.asc(), User.lname.asc())
-            .all()
-        )
+        from models import GroupMember, Group
+        
+        if current_user.is_member:
+            flash("غير مصرح لك بعرض هذه الصفحة.", "danger")
+            return redirect(url_for("dashboard"))
+            
+        if current_user.role == RoleEnum.Supervisor:
+            # Only show members belonging to groups the supervisor manages
+            all_users = (
+                User.query
+                .join(GroupMember, User.user_id == GroupMember.member_id)
+                .join(Group, Group.group_id == GroupMember.group_id)
+                .filter(Group.supervisor_id == current_user.user_id)
+                .filter(User.role == RoleEnum.Member)
+                .order_by(User.fname.asc(), User.lname.asc())
+                .distinct()
+                .all()
+            )
+        else:
+            all_users = (
+                User.query
+                .order_by(User.role.asc(), User.fname.asc(), User.lname.asc())
+                .all()
+            )
 
         return render_template("users.html", users=all_users)
 

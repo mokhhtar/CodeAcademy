@@ -438,7 +438,7 @@ edit_group Group | undefined (present when editing)
     </div>
 
     {# New Group button → triggers Add modal #}
-    {% if current_user.is_admin %}
+    {% if not current_user.is_member %}
     <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
         data-bs-toggle="modal" data-bs-target="#addGroupModal" aria-label="إنشاء مجموعة جديدة">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
@@ -619,7 +619,7 @@ MAIN CONTENT CARD
                         </span>
                         لا توجد مجموعات بعد.
                         <br />
-                        {% if current_user.is_admin %}
+                        {% if not current_user.is_member %}
                         <button type="button" data-bs-toggle="modal" data-bs-target="#addGroupModal" style="color:#2dd4bf;background:none;border:none;
                            cursor:pointer;font-size:.85rem;margin-top:8px;">
                             أنشئ أول مجموعة الآن
@@ -704,6 +704,7 @@ MODAL 1 — ADD GROUP
                         </div>
 
                         {# Supervisor dropdown #}
+                        {% if current_user.is_admin %}
                         <div>
                             <label class="form-label-dark" for="add_supervisor_id">
                                 <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
@@ -720,6 +721,7 @@ MODAL 1 — ADD GROUP
                                 {% endfor %}
                             </select>
                         </div>
+                        {% endif %}
 
                     </div>
                 </div>

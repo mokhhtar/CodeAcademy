@@ -223,7 +223,7 @@ def _register_auth_routes(app: Flask) -> None:
         • The `remember` checkbox creates a persistent cookie.
         """
         email    = request.form.get("email",    "").strip().lower()
-        password = request.form.get("password", "").strip()
+        password = request.form.get("password", "")
         remember = bool(request.form.get("remember"))
 
         # ── Basic presence check ──────────────────────────────────────────
