@@ -608,6 +608,7 @@ MAIN CONTENT CARD
                                 </div>
                             </div>
                         </div>
+
                     </td>
 
                     {# Email #}
@@ -650,6 +651,7 @@ MAIN CONTENT CARD
                         </span>
                     </td>
 
+
                     {# Actions #}
                     {% if current_user.is_admin %}
                     <td class="text-center">
@@ -659,8 +661,7 @@ MAIN CONTENT CARD
                                 data-bs-target="#editUserModal" data-user-id="{{ user.user_id }}"
                                 data-user-fname="{{ user.fname }}" data-user-lname="{{ user.lname }}"
                                 data-user-email="{{ user.email }}" data-user-role="{{ user.role.value }}"
-                                data-user-status="{{ user.status.value }}"
-                                aria-label="تعديل {{ user.full_name }}">
+                                data-user-status="{{ user.status.value }}" aria-label="تعديل {{ user.full_name }}">
                                 <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
                                 تعديل
                             </button>
@@ -676,6 +677,12 @@ MAIN CONTENT CARD
                             </button>
                             {% endif %}
                         </div>
+                        {% if current_user.is_admin and user.role.value == 'Supervisor' %}
+                        <a href="{{ url_for('admin_supervisor_stats', sup_id=user.user_id) }}"
+                            class="btn btn-sm btn-outline-info" title="عرض إحصائيات المشرف">
+                            <i class="fa-solid fa-chart-pie me-1"></i> الإحصائيات
+                        </a>
+                        {% endif %}
                     </td>
                     {% endif %}
 
@@ -955,9 +962,11 @@ MODAL — EDIT USER
                                 <i class="fa-solid fa-key" aria-hidden="true"></i>كلمة المرور الجديدة (اختياري)
                             </label>
                             <div class="pw-wrap">
-                                <input type="password" id="edit_password" name="password" class="form-control-dark pw-field"
-                                    placeholder="اتركه فارغاً للاحتفاظ بالحالية" autocomplete="new-password">
-                                <button type="button" class="pw-eye" id="editPwEye" aria-label="إظهار/إخفاء كلمة المرور fade">
+                                <input type="password" id="edit_password" name="password"
+                                    class="form-control-dark pw-field" placeholder="اتركه فارغاً للاحتفاظ بالحالية"
+                                    autocomplete="new-password">
+                                <button type="button" class="pw-eye" id="editPwEye"
+                                    aria-label="إظهار/إخفاء كلمة المرور fade">
                                     <i class="fa-regular fa-eye" id="editPwEyeIcon" aria-hidden="true"></i>
                                 </button>
                             </div>
@@ -997,7 +1006,8 @@ MODAL — DELETE USER
                 <div class="modal-body p-4">
                     <p class="delete-warn-text">
                         هل أنت متأكد من رغبتك في حذف حساب <strong id="delUserName"></strong>؟<br>
-                        الدور الحالي: <span class="badge badge-custom badge-role-admin" id="delUserRole" style="font-size: .65rem;"></span>
+                        الدور الحالي: <span class="badge badge-custom badge-role-admin" id="delUserRole"
+                            style="font-size: .65rem;"></span>
                     </p>
                     <div style="background:rgba(239, 68, 68, .08);
                                 border:1px solid rgba(239, 68, 68, .2);
@@ -1007,7 +1017,8 @@ MODAL — DELETE USER
                         <i class="fa-solid fa-circle-info" style="color:#f87171;margin-top:1px;flex-shrink:0;"
                             aria-hidden="true"></i>
                         <span>
-                            هذا الإجراء نهائي ولا يمكن التراجع عنه. سيؤدي إلى حذف تمامی بيانات المستخدم بما في ذلك المشاركات والاشتراكات.
+                            هذا الإجراء نهائي ولا يمكن التراجع عنه. سيؤدي إلى حذف تمامی بيانات المستخدم بما في ذلك
+                            المشاركات والاشتراكات.
                         </span>
                     </div>
                 </div>
@@ -1174,14 +1185,14 @@ MODAL — DELETE USER
                 document.getElementById('edit_fname').value = fname;
                 document.getElementById('edit_lname').value = lname;
                 document.getElementById('edit_email').value = email;
-                
+
                 // Select specific options
                 const roleSelect = document.getElementById('edit_role');
                 Array.from(roleSelect.options).forEach(opt => opt.selected = (opt.value === role));
 
                 const statusSelect = document.getElementById('edit_status');
                 Array.from(statusSelect.options).forEach(opt => opt.selected = (opt.value === status));
-                
+
                 // Clear password field
                 document.getElementById('edit_password').value = '';
             });

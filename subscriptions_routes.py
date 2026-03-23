@@ -26,6 +26,7 @@ from models import (
     SubscriptionPlan,
     SubscriptionStatusEnum,
     User,
+    RoleEnum,
     db,
 )
 

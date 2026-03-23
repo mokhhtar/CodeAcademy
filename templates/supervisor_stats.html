@@ -1,0 +1,611 @@
+{% extends 'base.html' %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+supervisor_stats.html — إحصائيات المدرب (Admin view)
+Extends : base.html
+Route : GET /admin/supervisor/<supervisor_id>/stats
+    Variables:
+    supervisor User object
+    total_groups int
+    total_students int
+    total_certificates int
+    completion_pct int (0-100)
+    sup_groups list[Group]
+    sup_students list[dict] keys: member, group, gm, sub, has_cert
+    ════════════════════════════════════════════════════════════════════════════ #}
+
+    {% block title %}إحصائيات المدرب: {{ supervisor.full_name }} — أكاديمية شيفرة{% endblock %}
+    {% block page_title %}إحصائيات المدرب{% endblock %}
+
+    {% block head_extra %}
+    <style>
+        /* ── Supervisor profile hero ──────────────────────────────────────── */
+        .sup-profile-hero {
+            background: linear-gradient(135deg, #0f1f38 0%, #1e2a4a 50%, #0f172a 100%);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            padding: 28px 32px;
+            margin-bottom: 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sup-profile-hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 80% 50%,
+                    rgba(129, 140, 248, .07) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .sup-big-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1e3a5f, #818cf8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #fff;
+            flex-shrink: 0;
+            box-shadow: 0 0 0 3px rgba(129, 140, 248, .3);
+        }
+
+        .sup-name-title {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .sup-email-meta {
+            font-size: .82rem;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sup-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: .7rem;
+            font-weight: 700;
+        }
+
+        .sup-status-active {
+            background: rgba(16, 185, 129, .12);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, .25);
+        }
+
+        .sup-status-inactive {
+            background: rgba(100, 116, 139, .12);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, .25);
+        }
+
+        /* ── Stat card values ─────────────────────────────────────────────── */
+        .stat-big-value {
+            font-size: 2.4rem;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--text-primary);
+            margin: 10px 0 5px;
+        }
+
+        .stat-big-label {
+            font-size: .8rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-mini-trend {
+            font-size: .72rem;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--surface-border);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ── Group row cells ──────────────────────────────────────────────── */
+        .group-name-strong {
+            font-size: .9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .group-desc-small {
+            font-size: .72rem;
+            color: var(--text-muted);
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .member-count-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 9px;
+            border-radius: 20px;
+            font-size: .7rem;
+            font-weight: 600;
+            background: rgba(45, 212, 191, .08);
+            border: 1px solid rgba(45, 212, 191, .18);
+            color: #2dd4bf;
+        }
+
+        /* ── Student chip ─────────────────────────────────────────────────── */
+        .student-chip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .student-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #1e3a5f, #2dd4bf);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .72rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .student-name {
+            font-size: .875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .student-email {
+            font-size: .72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Sub status badges ────────────────────────────────────────────── */
+        .sub-b-active {
+            background: rgba(16, 185, 129, .12);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, .25)
+        }
+
+        .sub-b-expired {
+            background: rgba(100, 116, 139, .1);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, .22)
+        }
+
+        .sub-b-suspended {
+            background: rgba(245, 158, 11, .1);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, .22)
+        }
+
+        .sub-b-canceled {
+            background: rgba(239, 68, 68, .1);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, .22)
+        }
+
+        /* ── Certificate badge ────────────────────────────────────────────── */
+        .cert-yes {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: .72rem;
+            font-weight: 600;
+            color: #2dd4bf;
+            padding: 2px 9px;
+            border-radius: 20px;
+            background: rgba(45, 212, 191, .08);
+            border: 1px solid rgba(45, 212, 191, .2);
+        }
+
+        .cert-no {
+            font-size: .72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Date mono ────────────────────────────────────────────────────── */
+        .date-mono-sm {
+            font-family: var(--font-mono);
+            font-size: .78rem;
+            color: var(--text-secondary);
+        }
+
+        /* ── Completion progress ──────────────────────────────────────────── */
+        .completion-bar-wrap {
+            height: 4px;
+            border-radius: 2px;
+            background: var(--surface-border);
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .completion-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: #f59e0b;
+            transition: width 1s ease;
+        }
+
+        @media (max-width: 767px) {
+            .sup-profile-hero {
+                padding: 20px 18px;
+            }
+
+            .stat-big-value {
+                font-size: 1.9rem;
+            }
+        }
+    </style>
+    {% endblock %}
+
+
+    {% block content %}
+
+    {# ── Back button + page header ────────────────────────────────────────────── #}
+    <div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+        <div>
+            <h1 class="page-title">
+                <i class="fa-solid fa-chart-column me-2" style="color:#818cf8;" aria-hidden="true"></i>
+                إحصائيات المدرب
+            </h1>
+            <p class="page-subtitle">
+                نظرة تفصيلية على أداء ومجموعات المدرب من منظور الإدارة
+            </p>
+        </div>
+        <a href="{{ url_for('users') }}" class="btn btn-outline-subtle d-flex align-items-center gap-2"
+            style="height:38px;" aria-label="رجوع إلى قائمة المستخدمين">
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            رجوع للمستخدمين
+        </a>
+    </div>
+
+    {# ── Supervisor profile hero ──────────────────────────────────────────────── #}
+    <div class="sup-profile-hero" role="region" aria-label="ملف المدرب">
+        <div class="row align-items-center g-4">
+
+            <div class="col-auto">
+                <div class="sup-big-avatar" aria-hidden="true">
+                    {{ supervisor.fname[0] | upper }}
+                </div>
+            </div>
+
+            <div class="col" style="position:relative;z-index:1;">
+                <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+                    <h2 class="sup-name-title mb-0">
+                        {{ supervisor.fname }} {{ supervisor.lname }}
+                    </h2>
+                    {% if supervisor.is_active %}
+                    <span class="sup-status-badge sup-status-active" aria-label="حالة الحساب: نشط">
+                        <i class="fa-solid fa-circle" style="font-size:.5rem;" aria-hidden="true"></i>
+                        نشط
+                    </span>
+                    {% else %}
+                    <span class="sup-status-badge sup-status-inactive" aria-label="حالة الحساب: غير نشط">
+                        <i class="fa-solid fa-circle" style="font-size:.5rem;" aria-hidden="true"></i>
+                        غير نشط
+                    </span>
+                    {% endif %}
+                </div>
+
+                <div class="sup-email-meta">
+                    <i class="fa-solid fa-envelope" style="color:#818cf8;" aria-hidden="true"></i>
+                    {{ supervisor.email }}
+                </div>
+
+                <div style="margin-top:8px;font-size:.75rem;color:var(--text-muted);">
+                    <i class="fa-regular fa-calendar-plus me-1" aria-hidden="true"></i>
+                    انضم في:
+                    <span style="font-family:var(--font-mono);">
+                        {{ supervisor.created_at.strftime('%Y-%m-%d') }}
+                    </span>
+                    &nbsp;·&nbsp;
+                    UID-{{ "%05d" % supervisor.user_id }}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {# ── Stat cards ───────────────────────────────────────────────────────────── #}
+    {% set completion_pct = ((total_certificates / total_students * 100) | round | int)
+    if total_students > 0 else 0 %}
+
+    <div class="row g-4 mb-4" aria-label="إحصائيات المدرب الرئيسية">
+
+        {# Card 1 — مجموعاتي #}
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="stat-card h-100" role="region" aria-label="عدد المجموعات">
+                <div class="stat-icon stat-icon-teal" aria-hidden="true">
+                    <i class="fa-solid fa-layer-group"></i>
+                </div>
+                <div class="stat-big-value" aria-label="{{ total_groups }} مجموعة">
+                    {{ total_groups }}
+                </div>
+                <div class="stat-big-label">مجموعاتي</div>
+                <div class="stat-mini-trend">
+                    <i class="fa-solid fa-circle-check" style="color:#2dd4bf;" aria-hidden="true"></i>
+                    {% if sup_groups %}
+                    أحدثها: {{ sup_groups[0].group_name | truncate(24, True, '…') }}
+                    {% else %}
+                    لا توجد مجموعات مُعيَّنة
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Card 2 — إجمالي المتدربين #}
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="stat-card h-100" role="region" aria-label="إجمالي المتدربين">
+                <div class="stat-icon stat-icon-sky" aria-hidden="true">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                </div>
+                <div class="stat-big-value" aria-label="{{ total_students }} متدرب">
+                    {{ total_students }}
+                </div>
+                <div class="stat-big-label">إجمالي المتدربين</div>
+                <div class="stat-mini-trend">
+                    <i class="fa-solid fa-users" style="color:#38bdf8;" aria-hidden="true"></i>
+                    موزَّعون على {{ total_groups }} مجموعة
+                </div>
+            </div>
+        </div>
+
+        {# Card 3 — الشهادات المُصدَرة #}
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="stat-card h-100" role="region" aria-label="الشهادات المُصدَرة">
+                <div class="stat-icon stat-icon-amber" aria-hidden="true">
+                    <i class="fa-solid fa-certificate"></i>
+                </div>
+                <div class="stat-big-value" aria-label="{{ total_certificates }} شهادة">
+                    {{ total_certificates }}
+                </div>
+                <div class="stat-big-label">الشهادات المُصدَرة</div>
+                <div class="stat-mini-trend" aria-label="نسبة الإتمام {{ completion_pct }}%">
+                    <div class="completion-bar-wrap" aria-hidden="true">
+                        <div class="completion-bar-fill" style="width:{{ completion_pct }}%;"></div>
+                    </div>
+                    <span style="flex-shrink:0;color:var(--text-secondary);">{{ completion_pct }}%</span>
+                </div>
+            </div>
+        </div>
+
+    </div>{# /.row stat cards #}
+
+
+    {# ── Two-column detail tables ─────────────────────────────────────────────── #}
+    <div class="row g-4">
+
+        {# ══ Table 1 — Groups ════════════════════════════════════════════════════ #}
+        <div class="col-12 col-xl-5">
+            <div class="content-card h-100" role="region" aria-label="مجموعات المدرب">
+
+                <div class="content-card-header">
+                    <h2 class="content-card-title">
+                        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                        المجموعات
+                        <span style="font-size:.78rem;font-weight:400;color:var(--text-muted);">
+                            ({{ total_groups }})
+                        </span>
+                    </h2>
+                    <a href="{{ url_for('groups') }}" class="btn btn-outline-subtle btn-sm" style="font-size:.74rem;"
+                        aria-label="إدارة جميع المجموعات">
+                        <i class="fa-solid fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>
+                        إدارة المجموعات
+                    </a>
+                </div>
+
+                {% if sup_groups %}
+                <div class="table-responsive">
+                    <table class="table table-dark-custom mb-0" aria-label="قائمة مجموعات المدرب">
+                        <thead>
+                            <tr>
+                                <th scope="col" style="width:36px;">#</th>
+                                <th scope="col">اسم المجموعة</th>
+                                <th scope="col" class="text-center" style="width:85px;">الأعضاء</th>
+                                <th scope="col" class="text-center" style="width:90px;">الشهادات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for group in sup_groups %}
+                            <tr>
+                                <td style="color:var(--text-muted);font-size:.78rem;">{{ loop.index }}</td>
+                                <td>
+                                    <div class="group-name-strong">{{ group.group_name }}</div>
+                                    {% if group.description %}
+                                    <div class="group-desc-small" title="{{ group.description }}">
+                                        {{ group.description }}
+                                    </div>
+                                    {% endif %}
+                                    <div style="font-size:.68rem;color:var(--text-muted);
+                            font-family:var(--font-mono);margin-top:3px;">
+                                        {{ group.created_at.strftime('%Y-%m-%d') }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="member-count-chip" aria-label="{{ group.member_count }} عضو">
+                                        <i class="fa-solid fa-users" style="font-size:.6rem;" aria-hidden="true"></i>
+                                        {{ group.member_count }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    {# Count certificates issued for this group by this supervisor #}
+                                    {% set g_certs = sup_students
+                                    | selectattr('group.group_id', 'equalto', group.group_id)
+                                    | selectattr('has_cert')
+                                    | list | length %}
+                                    <span style="font-size:.8rem;font-weight:700;
+                             color:{% if g_certs > 0 %}#fbbf24{% else %}var(--text-muted){% endif %};"
+                                        aria-label="{{ g_certs }} شهادة صادرة">
+                                        {{ g_certs }}
+                                        <i class="fa-solid fa-certificate" style="font-size:.65rem;"
+                                            aria-hidden="true"></i>
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state" style="padding:32px 0;">
+                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                    <p>لم يتم تعيين مجموعات لهذا المدرب بعد.</p>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>{# /col groups #}
+
+        {# ══ Table 2 — Students ══════════════════════════════════════════════════ #}
+        <div class="col-12 col-xl-7">
+            <div class="content-card h-100" role="region" aria-label="طلاب المدرب">
+
+                <div class="content-card-header">
+                    <h2 class="content-card-title">
+                        <i class="fa-solid fa-users" aria-hidden="true"></i>
+                        المتدربون
+                        <span style="font-size:.78rem;font-weight:400;color:var(--text-muted);">
+                            ({{ total_students }})
+                        </span>
+                    </h2>
+                    <a href="{{ url_for('subscriptions') }}" class="btn btn-outline-subtle btn-sm"
+                        style="font-size:.74rem;" aria-label="عرض كل الاشتراكات">
+                        <i class="fa-solid fa-id-card me-1" aria-hidden="true"></i>
+                        الاشتراكات
+                    </a>
+                </div>
+
+                {% if sup_students %}
+                <div class="table-responsive">
+                    <table class="table table-dark-custom mb-0" aria-label="قائمة طلاب المدرب">
+                        <thead>
+                            <tr>
+                                <th scope="col" style="width:36px;">#</th>
+                                <th scope="col">الطالب</th>
+                                <th scope="col">المجموعة</th>
+                                <th scope="col" class="text-center">الاشتراك</th>
+                                <th scope="col" class="text-center" style="width:80px;">شهادة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in sup_students %}
+                            {# ── Subscription badge vars ──────────────────────────── #}
+                            {% if row.sub %}
+                            {% set sv = row.sub.status.value %}
+                            {% if sv == 'Active' %}
+                            {% set sub_cls = 'sub-b-active' %} {% set sub_ar = 'نشط' %}
+                            {% elif sv == 'Expired' %}
+                            {% set sub_cls = 'sub-b-expired' %} {% set sub_ar = 'منتهي' %}
+                            {% elif sv == 'Suspended' %}
+                            {% set sub_cls = 'sub-b-suspended' %}{% set sub_ar = 'معلّق' %}
+                            {% else %}
+                            {% set sub_cls = 'sub-b-canceled' %} {% set sub_ar = 'ملغى' %}
+                            {% endif %}
+                            {% endif %}
+
+                            <tr aria-label="الطالب {{ row.member.full_name }}">
+
+                                <td style="color:var(--text-muted);font-size:.78rem;">
+                                    {{ loop.index }}
+                                </td>
+
+                                <td>
+                                    <div class="student-chip">
+                                        <div class="student-avatar" aria-hidden="true"
+                                            title="{{ row.member.full_name }}">
+                                            {{ row.member.fname[0] | upper }}
+                                        </div>
+                                        <div>
+                                            <div class="student-name">
+                                                {{ row.member.fname }} {{ row.member.lname }}
+                                            </div>
+                                            <div class="student-email">{{ row.member.email }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <span style="font-size:.8rem;font-weight:600;
+                             color:var(--text-primary);">
+                                        {{ row.group.group_name | truncate(22, True, '…') }}
+                                    </span>
+                                    <div class="date-mono-sm" style="margin-top:2px;">
+                                        {{ row.gm.joined_date.strftime('%Y-%m-%d') }}
+                                    </div>
+                                </td>
+
+                                <td class="text-center">
+                                    {% if row.sub %}
+                                    <span class="badge badge-custom {{ sub_cls }}"
+                                        aria-label="حالة الاشتراك: {{ sub_ar }}">
+                                        {{ sub_ar }}
+                                    </span>
+                                    {% else %}
+                                    <span style="font-size:.72rem;color:var(--text-muted);">—</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if row.has_cert %}
+                                    <span class="cert-yes" aria-label="يمتلك شهادة في هذه المجموعة">
+                                        <i class="fa-solid fa-certificate" aria-hidden="true"></i>
+                                        نعم
+                                    </span>
+                                    {% else %}
+                                    <span class="cert-no" aria-label="لا يمتلك شهادة بعد">—</span>
+                                    {% endif %}
+                                </td>
+
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {# Table footer #}
+                <div class="d-flex align-items-center justify-content-between
+                  flex-wrap gap-2 pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
+                    <span style="font-size:.78rem;color:var(--text-muted);">
+                        {{ total_students }} متدرب ·
+                        {{ total_certificates }} شهادة صادرة ·
+                        {{ completion_pct }}% نسبة إتمام
+                    </span>
+                    <a href="{{ url_for('certificates') }}" class="btn btn-outline-subtle btn-sm"
+                        style="font-size:.74rem;" aria-label="عرض كل الشهادات">
+                        <i class="fa-solid fa-certificate me-1" aria-hidden="true"></i>
+                        عرض الشهادات
+                    </a>
+                </div>
+
+                {% else %}
+                <div class="empty-state" style="padding:32px 0;">
+                    <i class="fa-solid fa-users-slash" aria-hidden="true"></i>
+                    <p>لا يوجد طلاب مسجَّلون في مجموعات هذا المدرب بعد.</p>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>{# /col students #}
+
+    </div>{# /.row detail tables #}
+
+    {% endblock %}

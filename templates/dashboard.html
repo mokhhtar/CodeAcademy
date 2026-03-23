@@ -1003,22 +1003,25 @@ WELCOME HERO
 
 {# ════════════════════════════════════════════════════════════════════════
 OVERVIEW STAT CARDS
+Backend passes: total_groups (int), total_students (int),
+total_certificates (int)
+Derived locally: active_sub_count, completion_pct
 ════════════════════════════════════════════════════════════════════════ #}
-{# Compute derived counts from my_students list (no extra DB query needed) #}
-{% set total_students_count = my_students | length %}
-{% set certified_count = my_students | selectattr('has_cert') | list | length %}
-{% set active_sub_count = my_students | selectattr('sub') | list | length %}
+{# Derive helper counts from my_students for the trend lines #}
+{% set _active_sub_count = my_students | selectattr('sub') | list | length %}
+{% set _completion_pct = ((total_certificates / total_students * 100) | round | int)
+if total_students > 0 else 0 %}
 
 <div class="row g-4 mb-4" aria-label="إحصائيات المدرب">
 
-    {# Card 1 — Total Groups #}
-    <div class="col-12 col-sm-6 col-lg-3">
-        <div class="stat-card h-100" role="region" aria-label="عدد المجموعات">
+    {# ── Card 1 — مجموعاتي ─────────────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-lg-4">
+        <div class="stat-card h-100" role="region" aria-label="عدد مجموعاتي">
             <div class="stat-icon stat-icon-teal" aria-hidden="true">
                 <i class="fa-solid fa-layer-group"></i>
             </div>
-            <div class="sup-stat-value" aria-label="{{ my_groups | length }} مجموعة">
-                {{ my_groups | length }}
+            <div class="sup-stat-value" aria-label="{{ total_groups }} مجموعة">
+                {{ total_groups }}
             </div>
             <div class="sup-stat-label">مجموعاتي</div>
             <div class="sup-stat-trend">
@@ -1032,59 +1035,42 @@ OVERVIEW STAT CARDS
         </div>
     </div>
 
-    {# Card 2 — Total Students #}
-    <div class="col-12 col-sm-6 col-lg-3">
-        <div class="stat-card h-100" role="region" aria-label="إجمالي الطلاب">
+    {# ── Card 2 — إجمالي المتدربين ─────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-lg-4">
+        <div class="stat-card h-100" role="region" aria-label="إجمالي المتدربين">
             <div class="stat-icon stat-icon-sky" aria-hidden="true">
-                <i class="fa-solid fa-users"></i>
+                <i class="fa-solid fa-graduation-cap"></i>
             </div>
-            <div class="sup-stat-value" aria-label="{{ total_students_count }} طالب">
-                {{ total_students_count }}
+            <div class="sup-stat-value" aria-label="{{ total_students }} متدرب">
+                {{ total_students }}
             </div>
-            <div class="sup-stat-label">إجمالي الطلاب</div>
+            <div class="sup-stat-label">إجمالي المتدربين</div>
             <div class="sup-stat-trend">
                 <i class="fa-solid fa-id-card" style="color:#38bdf8;" aria-hidden="true"></i>
-                {{ active_sub_count }} طالب لديه اشتراك نشط
+                {{ _active_sub_count }} متدرب لديه اشتراك نشط
             </div>
         </div>
     </div>
 
-    {# Card 3 — Issued Certificates #}
-    <div class="col-12 col-sm-6 col-lg-3">
+    {# ── Card 3 — الشهادات المُصدَرة ────────────────────────────────── #}
+    <div class="col-12 col-sm-6 col-lg-4">
         <div class="stat-card h-100" role="region" aria-label="الشهادات المُصدَرة">
             <div class="stat-icon stat-icon-amber" aria-hidden="true">
                 <i class="fa-solid fa-certificate"></i>
             </div>
-            <div class="sup-stat-value" aria-label="{{ certified_count }} شهادة">
-                {{ certified_count }}
+            <div class="sup-stat-value" aria-label="{{ total_certificates }} شهادة">
+                {{ total_certificates }}
             </div>
-            <div class="sup-stat-label">شهادات مُصدَرة</div>
-            <div class="sup-stat-trend">
-                <i class="fa-solid fa-hourglass-half" style="color:#fbbf24;" aria-hidden="true"></i>
-                {{ total_students_count - certified_count }} طالب لم يحصل على شهادة
-            </div>
-        </div>
-    </div>
-
-    {# Card 4 — Completion Rate #}
-    <div class="col-12 col-sm-6 col-lg-3">
-        {% set completion_pct = ((certified_count / total_students_count) * 100) | round | int
-        if total_students_count > 0 else 0 %}
-        <div class="stat-card h-100" role="region" aria-label="نسبة الإتمام">
-            <div class="stat-icon stat-icon-emerald" aria-hidden="true">
-                <i class="fa-solid fa-chart-simple"></i>
-            </div>
-            <div class="sup-stat-value" aria-label="{{ completion_pct }}% نسبة الإتمام">
-                {{ completion_pct }}<span style="font-size:1.2rem;font-weight:600;">%</span>
-            </div>
-            <div class="sup-stat-label">نسبة الإتمام</div>
-            <div class="sup-stat-trend" aria-hidden="true">
+            <div class="sup-stat-label">الشهادات المُصدَرة</div>
+            <div class="sup-stat-trend" aria-label="نسبة الإتمام {{ _completion_pct }}%">
                 {# Mini progress bar #}
-                <div style="flex:1;height:4px;border-radius:2px;background:var(--surface-border);overflow:hidden;">
-                    <div style="height:100%;border-radius:2px;background:#10b981;
-                      width:{{ completion_pct }}%;transition:width 1s ease;">
+                <div style="flex:1;height:4px;border-radius:2px;
+                    background:var(--surface-border);overflow:hidden;">
+                    <div style="height:100%;border-radius:2px;background:#f59e0b;
+                      width:{{ _completion_pct }}%;transition:width 1s ease;">
                     </div>
                 </div>
+                <span style="flex-shrink:0;">{{ _completion_pct }}%</span>
             </div>
         </div>
     </div>
@@ -1104,7 +1090,7 @@ STUDENTS TABLE
             <i class="fa-solid fa-users" aria-hidden="true"></i>
             طلابي
             <span style="font-size:.78rem;font-weight:400;color:var(--text-muted);margin-right:4px;">
-                ({{ total_students_count }})
+                ({{ total_students }})
             </span>
         </h2>
 
@@ -1283,9 +1269,9 @@ STUDENTS TABLE
               flex-wrap gap-2 pt-3 mt-1" style="border-top:1px solid var(--surface-border);">
         <span style="font-size:.78rem;color:var(--text-muted);">
             يُعرض
-            <strong id="supVisibleCount" style="color:var(--text-secondary);">{{ total_students_count }}</strong>
+            <strong id="supVisibleCount" style="color:var(--text-secondary);">{{ total_students }}</strong>
             من
-            <strong style="color:var(--text-secondary);">{{ total_students_count }}</strong>
+            <strong style="color:var(--text-secondary);">{{ total_students }}</strong>
             طالب
         </span>
         <a href="{{ url_for('certificates') }}" class="btn btn-outline-subtle btn-sm" style="font-size:.75rem;"
@@ -1354,20 +1340,9 @@ STUDENTS TABLE
                     ينتهي: {{ member_subscription.end_date.strftime('%Y-%m-%d') }}
                 </div>
                 {% if days <= 5 and member_subscription.status.value=='Active' %} <div
-                    style="margin-top:10px;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.25);font-size:.75rem;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:7px;">
-                    <div>
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        اشتراك يقترب من الانتهاء — يمكنك تجديده الآن.
-                    </div>
-                    <a href="{{ url_for('checkout') }}" class="btn btn-sm"
-                        style="background:#f87171;color:#fff;border:none;font-weight:600;padding:4px 10px;text-decoration:none;">تجديد</a>
-            </div>
-            {% endif %}
-            {% if member_subscription.status.value != 'Active' %}
-            <div style="margin-top:12px;text-align:center;">
-                <a href="{{ url_for('checkout') }}" class="btn btn-sm w-100"
-                    style="background:{{ s_color }};color:#fff;border:none;font-weight:600;padding:8px;"><i
-                        class="fa-solid fa-arrows-rotate me-2"></i>تجديد / الدفع الاشتراك</a>
+                    style="margin-top:10px;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.25);font-size:.75rem;color:#fca5a5;display:flex;align-items:center;gap:7px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    اشتراكك يقترب من الانتهاء — تواصل مع الإدارة للتجديد.
             </div>
             {% endif %}
         </div>
@@ -1376,11 +1351,8 @@ STUDENTS TABLE
             style="background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:20px;text-align:center;">
             <i class="fa-regular fa-id-card"
                 style="font-size:2rem;color:var(--text-muted);opacity:.5;display:block;margin-bottom:10px;"></i>
-            <p style="font-size:.85rem;color:var(--text-muted);margin:0 0 14px;">لا يوجد اشتراك نشط حالياً.<br />سجّل
-                الآن لتفعيل حسابك.</p>
-            <a href="{{ url_for('checkout') }}" class="btn"
-                style="background:#2dd4bf;color:#0f172a;font-weight:600;font-size:.85rem;padding:8px 16px;text-decoration:none;"><i
-                    class="fa-solid fa-credit-card me-2"></i>اشترك الآن</a>
+            <p style="font-size:.85rem;color:var(--text-muted);margin:0;">لا يوجد اشتراك نشط حالياً.<br />تواصل مع
+                الإدارة للاشتراك.</p>
         </div>
         {% endif %}
     </div>
@@ -1393,8 +1365,8 @@ STUDENTS TABLE
             <div class="content-card-header">
                 <h2 class="content-card-title"><i class="fa-solid fa-graduation-cap"></i> مساراتي المسجَّلة</h2>
             </div>
-            {% if enrolled_groups %}
-            {% for group in enrolled_groups %}
+            {% if member_groups %}
+            {% for group in member_groups %}
             <div class="enrolled-group-card {% if not loop.last %}mb-3{% endif %}">
                 <div class="enrolled-group-name">
                     <i class="fa-solid fa-layer-group me-2" style="color:#2dd4bf;font-size:.85rem;"></i>{{

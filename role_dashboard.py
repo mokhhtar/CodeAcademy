@@ -1,21 +1,29 @@
 # =============================================================================
-#  role_dashboard.py  —  Replace _register_dashboard_routes(app) in app.py
+#  role_dashboard.py  —  Role-aware dashboard + Supervisor stats + Admin view
 #  Project : أكاديمية شيفرة  (Shyfra Academy)
 #
-#  This file provides:
-#    • A role-aware GET / and GET /dashboard route
-#    • POST /issue_certificate/<member_id>/<group_id>  (Supervisor only)
+#  CHANGES IN THIS VERSION
+#  ───────────────────────
+#  • _supervisor_dashboard() now passes total_groups, total_students,
+#    total_certificates to the template (via shared helper)
+#  • New route: GET /admin/supervisor/<sup_id>  (Admin only)
+#      Deep-dive performance page for a single supervisor
 #
-#  Replace the existing _register_dashboard_routes(app) call in create_app()
-#  with _register_role_dashboard_routes(app).
+#  Routes
+#  ──────
+#  GET  /                               → dashboard()
+#  GET  /dashboard                      → dashboard()
+#  POST /issue_certificate/<m>/<g>      → issue_certificate()
+#  GET  /admin/supervisor/<sup_id>      → admin_supervisor_stats()  ← NEW
 # =============================================================================
 
 import uuid
 from datetime import date, timedelta
+from functools import wraps
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import and_, func
 
 from models import (
     Certificate,
@@ -32,326 +40,171 @@ from models import (
 )
 
 
-def _register_role_dashboard_routes(app) -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+#  Role guards
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _supervisor_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or (
+            not current_user.is_supervisor and not current_user.is_admin
+        ):
+            flash("هذه العملية مخصصة للمدربين فقط.", "danger")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def _admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash("هذه الصفحة مخصصة للمسؤول فقط.", "danger")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Shared supervisor stats helper
+#  Called by both _supervisor_dashboard() and admin_supervisor_stats() so
+#  the calculation logic lives in exactly ONE place.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_supervisor_stats(supervisor_id: int) -> dict:
     """
-    Register the role-aware dashboard and certificate-issue routes.
-    Replaces the previous _register_dashboard_routes(app).
+    Compute all performance statistics for a supervisor by user_id.
+
+    Returns a dict with keys
+    ────────────────────────
+    total_groups        int   — groups where supervisor_id == arg
+    total_students      int   — UNIQUE members enrolled across those groups
+    total_certificates  int   — certificates issued_by == arg
+    my_groups           list[Group]
+    my_students         list[dict]
+        keys: member, group, gm, sub (active Subscription|None), has_cert (bool)
     """
 
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Shared constant
-    # ─────────────────────────────────────────────────────────────────────────
-    EXPIRY_ALERT_DAYS = 15
+    # ── 1. Groups ─────────────────────────────────────────────────────────
+    my_groups: list[Group] = (
+        Group.query
+        .filter_by(supervisor_id=supervisor_id)
+        .order_by(Group.created_at.desc())
+        .all()
+    )
+    total_groups: int = len(my_groups)
+
+    # Early return: no groups → all other stats are zero
+    if not my_groups:
+        return {
+            "total_groups"       : 0,
+            "total_students"     : 0,
+            "total_certificates" : 0,
+            "my_groups"          : [],
+            "my_students"        : [],
+        }
+
+    my_group_ids: list[int] = [g.group_id for g in my_groups]
+
+    # ── 2. Unique students across all supervised groups ────────────────────
+    #  COUNT(DISTINCT member_id) avoids double-counting a student who is
+    #  enrolled in more than one of this supervisor's groups.
+    total_students: int = (
+        db.session.query(func.count(func.distinct(GroupMember.member_id)))
+        .filter(GroupMember.group_id.in_(my_group_ids))
+        .scalar() or 0
+    )
+
+    # ── 3. Certificates issued BY this supervisor (not just in their groups) ──
+    #  This counts every cert the supervisor has ever signed, including for
+    #  groups that may have been reassigned later.
+    total_certificates: int = (
+        Certificate.query
+        .filter_by(issued_by=supervisor_id)
+        .count()
+    )
+
+    # ── 4. Enriched student list (one row per member × group pair) ─────────
+    rows = (
+        db.session.query(
+            User,
+            Group,
+            GroupMember,
+            Subscription,   # may be None → outerjoin
+        )
+        .join(GroupMember, User.user_id   == GroupMember.member_id)
+        .join(Group,       Group.group_id == GroupMember.group_id)
+        .outerjoin(
+            Subscription,
+            and_(
+                Subscription.member_id == User.user_id,
+                Subscription.status    == SubscriptionStatusEnum.Active,
+            ),
+        )
+        .filter(GroupMember.group_id.in_(my_group_ids))
+        .order_by(Group.group_id.asc(), User.fname.asc())
+        .all()
+    )
+
+    # Pre-build a set of (member_id, group_id) tuples for O(1) cert lookup
+    issued_cert_pairs: set[tuple[int, int]] = {
+        (c.member_id, c.group_id)
+        for c in Certificate.query
+        .filter(Certificate.group_id.in_(my_group_ids))
+        .all()
+    }
+
+    # Deduplicate: a student can appear multiple times if they have more than
+    # one active subscription (edge case); we keep only the first hit per pair.
+    my_students: list[dict] = []
+    seen: set[tuple[int, int]] = set()
+
+    for member, group, gm, sub in rows:
+        key = (member.user_id, group.group_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        my_students.append({
+            "member"   : member,
+            "group"    : group,
+            "gm"       : gm,
+            "sub"      : sub,                      # None if no active sub
+            "has_cert" : key in issued_cert_pairs,  # disables issue button
+        })
+
+    return {
+        "total_groups"       : total_groups,
+        "total_students"     : total_students,
+        "total_certificates" : total_certificates,
+        "my_groups"          : my_groups,
+        "my_students"        : my_students,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Registration function — called from create_app()
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _register_role_dashboard_routes(app) -> None:
 
     # =========================================================================
     #  GET /  and  GET /dashboard
-    #  Dispatches to a role-specific data-fetching helper and renders
-    #  dashboard.html with a `role_type` discriminator so the template
-    #  can render the correct section.
     # =========================================================================
 
     @app.route("/")
     @app.route("/dashboard")
     @login_required
     def dashboard():
-        role = current_user.role
-
-        if role == RoleEnum.Admin:
-            ctx = _build_admin_context()
-        elif role == RoleEnum.Supervisor:
-            ctx = _build_supervisor_context()
+        if current_user.role == RoleEnum.Admin:
+            return _admin_dashboard()
+        elif current_user.role == RoleEnum.Supervisor:
+            return _supervisor_dashboard()
         else:
-            ctx = _build_member_context()
-
-        # role_type is always present — template switches on it
-        ctx["role_type"] = role.value
-        ctx["today"]     = date.today()
-
-        return render_template("dashboard.html", **ctx)
-
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  ADMIN context builder
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _build_admin_context() -> dict:
-        """
-        Full platform statistics for the Admin dashboard.
-
-        Keys returned
-        ─────────────
-        active_monthly      int
-        active_yearly       int
-        total_active        int
-        total_expired       int
-        total_suspended     int
-        total_canceled      int
-        renewals_this_month int
-        revenue_this_month  float
-        expiring_soon       list[(Subscription, fname, lname, email, plan_name)]
-        alerts_count        int
-        """
-        today       = date.today()
-        month_start = today.replace(day=1)
-
-        active_monthly: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
-            .filter(
-                Subscription.status == SubscriptionStatusEnum.Active,
-                SubscriptionPlan.duration_months == 1,
-            )
-            .scalar() or 0
-        )
-
-        active_yearly: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
-            .filter(
-                Subscription.status == SubscriptionStatusEnum.Active,
-                SubscriptionPlan.duration_months == 12,
-            )
-            .scalar() or 0
-        )
-
-        total_expired: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .filter(Subscription.status == SubscriptionStatusEnum.Expired)
-            .scalar() or 0
-        )
-
-        total_suspended: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .filter(Subscription.status == SubscriptionStatusEnum.Suspended)
-            .scalar() or 0
-        )
-
-        total_canceled: int = (
-            db.session.query(func.count(Subscription.subscription_id))
-            .filter(Subscription.status == SubscriptionStatusEnum.Canceled)
-            .scalar() or 0
-        )
-
-        renewals_this_month: int = (
-            db.session.query(func.count(PaymentReceipt.receipt_id))
-            .filter(
-                PaymentReceipt.payment_type == PaymentTypeEnum.Renewal,
-                PaymentReceipt.payment_date >= month_start,
-                PaymentReceipt.payment_date <= today,
-            )
-            .scalar() or 0
-        )
-
-        revenue_this_month: float = float(
-            db.session.query(
-                func.coalesce(func.sum(PaymentReceipt.amount_paid), 0)
-            )
-            .filter(
-                PaymentReceipt.payment_date >= month_start,
-                PaymentReceipt.payment_date <= today,
-            )
-            .scalar() or 0.0
-        )
-
-        alert_threshold = today + timedelta(days=EXPIRY_ALERT_DAYS)
-        expiring_soon = (
-            db.session.query(
-                Subscription,
-                User.fname, User.lname, User.email,
-                SubscriptionPlan.plan_name,
-            )
-            .join(User,             Subscription.member_id == User.user_id)
-            .join(SubscriptionPlan, Subscription.plan_id   == SubscriptionPlan.plan_id)
-            .filter(
-                Subscription.status   == SubscriptionStatusEnum.Active,
-                Subscription.end_date >= today,
-                Subscription.end_date <= alert_threshold,
-            )
-            .order_by(Subscription.end_date.asc())
-            .all()
-        )
-
-        return dict(
-            active_monthly      = active_monthly,
-            active_yearly       = active_yearly,
-            total_active        = active_monthly + active_yearly,
-            total_expired       = total_expired,
-            total_suspended     = total_suspended,
-            total_canceled      = total_canceled,
-            renewals_this_month = renewals_this_month,
-            revenue_this_month  = revenue_this_month,
-            expiring_soon       = expiring_soon,
-            alerts_count        = len(expiring_soon),
-            EXPIRY_ALERT_DAYS   = EXPIRY_ALERT_DAYS,
-        )
-
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  SUPERVISOR context builder
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _build_supervisor_context() -> dict:
-        """
-        Groups and member roster for the Supervisor dashboard.
-
-        Keys returned
-        ─────────────
-        supervised_groups       list[Group]
-        group_members           dict[group_id → list[(User, Subscription|None)]]
-        total_students          int
-        total_certificates_issued int
-        EXPIRY_ALERT_DAYS       int
-        """
-        supervisor_id = current_user.user_id
-
-        # Groups where this user is the supervisor
-        supervised_groups = (
-            Group.query
-            .filter_by(supervisor_id=supervisor_id)
-            .order_by(Group.created_at.desc())
-            .all()
-        )
-
-        # For each group, fetch enrolled members and their active subscription
-        group_members: dict = {}
-        total_students = 0
-
-        for group in supervised_groups:
-            rows = (
-                db.session.query(User, Subscription)
-                .join(GroupMember, User.user_id == GroupMember.member_id)
-                .outerjoin(
-                    Subscription,
-                    db.and_(
-                        Subscription.member_id == User.user_id,
-                        Subscription.status    == SubscriptionStatusEnum.Active,
-                    ),
-                )
-                .filter(GroupMember.group_id == group.group_id)
-                .order_by(User.fname)
-                .all()
-            )
-            group_members[group.group_id] = rows
-            total_students += len(rows)
-
-        # Certificates this supervisor has issued
-        total_certs_issued: int = (
-            Certificate.query
-            .filter_by(issued_by=supervisor_id)
-            .count()
-        )
-
-        # Members who completed the course (have a certificate) — for quick
-        # reference so the supervisor knows who still needs one
-        issued_cert_pairs: set = set(
-            db.session.query(Certificate.member_id, Certificate.group_id)
-            .filter_by(issued_by=supervisor_id)
-            .all()
-        )
-
-        return dict(
-            supervised_groups        = supervised_groups,
-            group_members            = group_members,
-            total_students           = total_students,
-            total_certificates_issued= total_certs_issued,
-            issued_cert_pairs        = issued_cert_pairs,
-            EXPIRY_ALERT_DAYS        = EXPIRY_ALERT_DAYS,
-        )
-
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  MEMBER context builder
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _build_member_context() -> dict:
-        """
-        Personal subscription data for the Member/Student dashboard.
-
-        Keys returned
-        ─────────────
-        active_subscription     Subscription | None
-        days_remaining          int | None
-        alert_level             str | None   ('danger' | 'warning' | 'success')
-        enrolled_groups         list[Group]
-        latest_receipts         list[PaymentReceipt]  (max 3)
-        member_certificates     list[Certificate]
-        EXPIRY_ALERT_DAYS       int
-        """
-        uid = current_user.user_id
-
-        # Active subscription (most recently created if multiple)
-        active_sub: Subscription | None = (
-            Subscription.query
-            .filter_by(member_id=uid, status=SubscriptionStatusEnum.Active)
-            .order_by(Subscription.created_at.desc())
-            .first()
-        )
-
-        days_remaining: int | None = None
-        alert_level:    str | None = None
-
-        if active_sub:
-            days_remaining = (active_sub.end_date - date.today()).days
-            if days_remaining <= 5:
-                alert_level = "danger"
-            elif days_remaining <= EXPIRY_ALERT_DAYS:
-                alert_level = "warning"
-            else:
-                alert_level = "success"
-
-        # Groups the member is enrolled in
-        enrolled_groups: list = (
-            Group.query
-            .join(GroupMember, Group.group_id == GroupMember.group_id)
-            .filter(GroupMember.member_id == uid)
-            .all()
-        )
-
-        # Latest 3 payment receipts (across all subscriptions)
-        latest_receipts: list = (
-            db.session.query(PaymentReceipt)
-            .join(Subscription,
-                  PaymentReceipt.subscription_id == Subscription.subscription_id)
-            .filter(Subscription.member_id == uid)
-            .order_by(PaymentReceipt.payment_date.desc())
-            .limit(3)
-            .all()
-        )
-
-        member_receipts_count: int = (
-            db.session.query(func.count(PaymentReceipt.receipt_id))
-            .join(Subscription, PaymentReceipt.subscription_id == Subscription.subscription_id)
-            .filter(Subscription.member_id == uid)
-            .scalar() or 0
-        )
-
-        # Member's certificates
-        member_certificates: list = (
-            Certificate.query
-            .filter_by(member_id=uid)
-            .order_by(Certificate.issue_date.desc())
-            .all()
-        )
-        
-        member_certs_count = len(member_certificates)
-
-        return dict(
-            member_subscription   = active_sub,
-            days_remaining        = days_remaining,
-            alert_level           = alert_level,
-            enrolled_groups       = enrolled_groups,
-            latest_receipts       = latest_receipts,
-            member_receipts_count = member_receipts_count,
-            member_certificates   = member_certificates,
-            member_certs_count    = member_certs_count,
-            EXPIRY_ALERT_DAYS     = EXPIRY_ALERT_DAYS,
-        )
-
+            return _member_dashboard()
 
     # =========================================================================
     #  POST /issue_certificate/<member_id>/<group_id>
-    #  Supervisor issues a certificate of completion to a specific student
-    #  in one of their supervised groups.
     # =========================================================================
 
     @app.route(
@@ -359,83 +212,58 @@ def _register_role_dashboard_routes(app) -> None:
         methods=["POST"],
     )
     @login_required
+    @_supervisor_required
     def issue_certificate(member_id: int, group_id: int):
-        """
-        Issue a completion certificate for a member in a group.
 
-        Access rules
-        ────────────
-        • Only Supervisors and Admins may issue certificates.
-        • A Supervisor can only issue for groups they supervise.
-        • Duplicate check: one certificate per (member, group) pair.
-
-        Certificate code format
-        ───────────────────────
-        CERT-<GROUP_ID>-<YEAR>-<8-char UUID hex>
-        e.g. CERT-001-2025-A3F7C1B2
-        """
-
-        # ── Role guard ────────────────────────────────────────────────────
-        if current_user.is_member:
-            flash("ليس لديك صلاحية لإصدار الشهادات.", "danger")
+        member: User | None = db.session.get(User, member_id)
+        if member is None or not member.is_member:
+            flash("الطالب غير موجود أو غير صالح.", "danger")
             return redirect(url_for("dashboard"))
 
-        # ── Fetch and validate group ──────────────────────────────────────
-        group: Group = db.get_or_404(
-            Group, group_id,
-            description=f"المجموعة رقم {group_id} غير موجودة."
-        )
-
-        # Supervisors can only issue for their own groups
-        if (
-            current_user.is_supervisor
-            and group.supervisor_id != current_user.user_id
-        ):
-            flash("لا يمكنك إصدار شهادة لمجموعة لست مشرفها.", "danger")
+        group: Group | None = db.session.get(Group, group_id)
+        if group is None:
+            flash("المجموعة غير موجودة.", "danger")
             return redirect(url_for("dashboard"))
 
-        # ── Fetch member ──────────────────────────────────────────────────
-        member: User = db.get_or_404(
-            User, member_id,
-            description=f"العضو رقم {member_id} غير موجود."
-        )
+        if current_user.is_supervisor and group.supervisor_id != current_user.user_id:
+            flash("لا يمكنك إصدار شهادات لمجموعة لا تشرف عليها.", "danger")
+            return redirect(url_for("dashboard"))
 
-        # ── Check the member is enrolled in this group ─────────────────────
-        enrollment = GroupMember.query.filter_by(
-            member_id=member_id, group_id=group_id
+        enrolled = GroupMember.query.filter_by(
+            group_id=group_id, member_id=member_id
         ).first()
-
-        if not enrollment:
+        if enrolled is None:
             flash(
-                f"الطالب '{member.full_name}' ليس مسجلاً في هذه المجموعة.",
-                "warning",
+                f"الطالب {member.full_name} غير مسجَّل في "
+                f"مجموعة '{group.group_name}'.", "warning",
             )
             return redirect(url_for("dashboard"))
 
-        # ── Duplicate certificate guard ────────────────────────────────────
-        existing_cert = Certificate.query.filter_by(
+        existing = Certificate.query.filter_by(
             member_id=member_id, group_id=group_id
         ).first()
-
-        if existing_cert:
+        if existing is not None:
             flash(
-                f"الطالب '{member.full_name}' حاصل مسبقاً على شهادة "
-                f"لمسار '{group.group_name}'.",
-                "info",
+                f"الطالب {member.full_name} يمتلك شهادةً بالفعل "
+                f"لمجموعة '{group.group_name}' "
+                f"(رمز: {existing.certificate_code}).", "warning",
             )
             return redirect(url_for("dashboard"))
 
-        # ── Generate unique certificate code ──────────────────────────────
-        year = date.today().year
-        unique_hex = uuid.uuid4().hex[:8].upper()
-        cert_code  = f"CERT-{group_id:03d}-{year}-{unique_hex}"
+        today        = date.today()
+        random_token = uuid.uuid4().hex[:6].upper()
+        cert_code    = (
+            f"CERT-{today.year}"
+            f"-{group_id:03d}"
+            f"-{member_id:04d}"
+            f"-{random_token}"
+        )
 
-        # ── Create and persist ────────────────────────────────────────────
         new_cert = Certificate(
             member_id        = member_id,
             group_id         = group_id,
             issued_by        = current_user.user_id,
-            issue_date       = date.today(),
+            issue_date       = today,
             certificate_code = cert_code,
         )
 
@@ -443,20 +271,243 @@ def _register_role_dashboard_routes(app) -> None:
             db.session.add(new_cert)
             db.session.commit()
             flash(
-                f"✅ تم إصدار شهادة بنجاح للطالب '{member.full_name}' "
-                f"في مسار '{group.group_name}'. "
-                f"رمز الشهادة: {cert_code}",
-                "success",
+                f"✅ تم إصدار شهادة للطالب {member.full_name} "
+                f"في مجموعة '{group.group_name}'. "
+                f"رمز الشهادة: {cert_code}", "success",
             )
         except Exception as exc:
             db.session.rollback()
             app.logger.error(
-                f"issue_certificate error — member={member_id} "
-                f"group={group_id}: {exc}"
+                f"issue_certificate error — member={member_id}, group={group_id}: {exc}"
             )
-            flash(
-                "حدث خطأ أثناء إصدار الشهادة. يرجى المحاولة مجدداً.",
-                "danger",
-            )
+            flash("حدث خطأ أثناء إصدار الشهادة. يرجى المحاولة مجدداً.", "danger")
 
         return redirect(url_for("dashboard"))
+
+    # =========================================================================
+    #  GET /admin/supervisor/<sup_id>   ← NEW
+    #
+    #  Admin-only deep-dive into a single supervisor's performance.
+    #  Uses the same _compute_supervisor_stats() helper as the dashboard so
+    #  numbers are always consistent.
+    #
+    #  Guard checks (in order)
+    #  ───────────────────────
+    #  1. Caller must be Admin  (@_admin_required)
+    #  2. Target user must exist
+    #  3. Target user must have role == Supervisor
+    #     (prevents viewing member/admin stats via URL manipulation)
+    #
+    #  Template variables
+    #  ──────────────────
+    #  supervisor          User
+    #  total_groups        int
+    #  total_students      int
+    #  total_certificates  int
+    #  my_groups           list[Group]
+    #  my_students         list[dict]   (same structure as dashboard)
+    # =========================================================================
+
+    @app.route("/admin/supervisor/<int:sup_id>", methods=["GET"])
+    @login_required
+    @_admin_required
+    def admin_supervisor_stats(sup_id: int):
+        """
+        Admin-only: render a detailed performance report for one supervisor.
+        """
+
+        # ── Fetch the supervisor user ──────────────────────────────────────
+        supervisor: User | None = db.session.get(User, sup_id)
+
+        if supervisor is None:
+            flash(f"المستخدم رقم {sup_id} غير موجود.", "danger")
+            return redirect(url_for("users"))
+
+        if supervisor.role != RoleEnum.Supervisor:
+            flash(
+                f"المستخدم '{supervisor.full_name}' ليس مدرباً — "
+                f"دوره: {supervisor.role.value}.", "warning",
+            )
+            return redirect(url_for("users"))
+
+        # ── Compute stats ──────────────────────────────────────────────────
+        stats = _compute_supervisor_stats(supervisor_id=sup_id)
+
+        return render_template(
+        "supervisor_stats.html",
+        supervisor         = supervisor,
+        total_groups       = stats["total_groups"],
+        total_students     = stats["total_students"],
+        total_certificates = stats["total_certificates"],
+        sup_groups         = stats["my_groups"],     # <--- قم بتغيير my_groups إلى sup_groups
+        sup_students       = stats["my_students"],   # <--- قم بتغيير my_students إلى sup_students
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Private dashboard builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _admin_dashboard():
+    today             = date.today()
+    month_start       = today.replace(day=1)
+    EXPIRY_ALERT_DAYS = 15
+
+    active_monthly: int = (
+        db.session.query(func.count(Subscription.subscription_id))
+        .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
+        .filter(
+            Subscription.status == SubscriptionStatusEnum.Active,
+            SubscriptionPlan.duration_months == 1,
+        ).scalar() or 0
+    )
+
+    active_yearly: int = (
+        db.session.query(func.count(Subscription.subscription_id))
+        .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
+        .filter(
+            Subscription.status == SubscriptionStatusEnum.Active,
+            SubscriptionPlan.duration_months == 12,
+        ).scalar() or 0
+    )
+
+    total_active    = active_monthly + active_yearly
+
+    total_expired: int = (
+        db.session.query(func.count(Subscription.subscription_id))
+        .filter(Subscription.status == SubscriptionStatusEnum.Expired)
+        .scalar() or 0
+    )
+
+    total_suspended: int = (
+        db.session.query(func.count(Subscription.subscription_id))
+        .filter(Subscription.status == SubscriptionStatusEnum.Suspended)
+        .scalar() or 0
+    )
+
+    total_canceled: int = (
+        db.session.query(func.count(Subscription.subscription_id))
+        .filter(Subscription.status == SubscriptionStatusEnum.Canceled)
+        .scalar() or 0
+    )
+
+    renewals_this_month: int = (
+        db.session.query(func.count(PaymentReceipt.receipt_id))
+        .filter(
+            PaymentReceipt.payment_type == PaymentTypeEnum.Renewal,
+            PaymentReceipt.payment_date >= month_start,
+            PaymentReceipt.payment_date <= today,
+        ).scalar() or 0
+    )
+
+    revenue_this_month: float = float(
+        db.session.query(func.coalesce(func.sum(PaymentReceipt.amount_paid), 0))
+        .filter(
+            PaymentReceipt.payment_date >= month_start,
+            PaymentReceipt.payment_date <= today,
+        ).scalar() or 0.0
+    )
+
+    alert_threshold = today + timedelta(days=EXPIRY_ALERT_DAYS)
+    expiring_soon = (
+        db.session.query(
+            Subscription,
+            User.fname, User.lname, User.email,
+            SubscriptionPlan.plan_name,
+        )
+        .join(User,             Subscription.member_id == User.user_id)
+        .join(SubscriptionPlan, Subscription.plan_id   == SubscriptionPlan.plan_id)
+        .filter(
+            Subscription.status   == SubscriptionStatusEnum.Active,
+            Subscription.end_date >= today,
+            Subscription.end_date <= alert_threshold,
+        )
+        .order_by(Subscription.end_date.asc())
+        .all()
+    )
+
+    return render_template(
+        "dashboard.html",
+        active_monthly      = active_monthly,
+        active_yearly       = active_yearly,
+        total_active        = total_active,
+        total_expired       = total_expired,
+        total_suspended     = total_suspended,
+        total_canceled      = total_canceled,
+        renewals_this_month = renewals_this_month,
+        revenue_this_month  = revenue_this_month,
+        expiring_soon       = expiring_soon,
+        alerts_count        = len(expiring_soon),
+        today               = today,
+        EXPIRY_ALERT_DAYS   = EXPIRY_ALERT_DAYS,
+    )
+
+
+def _supervisor_dashboard():
+    """
+    Supervisor's own dashboard.
+
+    Delegates entirely to _compute_supervisor_stats() so the numbers shown
+    here are always identical to what the Admin sees on /admin/supervisor/<id>.
+    """
+
+    stats = _compute_supervisor_stats(supervisor_id=current_user.user_id)
+
+    return render_template(
+        "dashboard.html",
+        # ── NEW: performance counters for the stat-card row ──────────────
+        total_groups        = stats["total_groups"],
+        total_students      = stats["total_students"],
+        total_certificates  = stats["total_certificates"],
+        # ── Existing: lists for the table / group cards ──────────────────
+        my_groups           = stats["my_groups"],
+        my_students         = stats["my_students"],
+    )
+
+
+def _member_dashboard():
+    member_id: int = current_user.user_id
+    today: date    = date.today()
+
+    member_subscription: Subscription | None = (
+        Subscription.query
+        .filter_by(member_id=member_id, status=SubscriptionStatusEnum.Active)
+        .order_by(Subscription.start_date.desc())
+        .first()
+    )
+    if member_subscription is None:
+        member_subscription = (
+            Subscription.query
+            .filter_by(member_id=member_id)
+            .order_by(Subscription.start_date.desc())
+            .first()
+        )
+
+    member_groups: list[Group] = (
+        Group.query
+        .join(GroupMember, Group.group_id == GroupMember.group_id)
+        .filter(GroupMember.member_id == member_id)
+        .order_by(Group.created_at.desc())
+        .all()
+    )
+
+    member_receipts_count: int = (
+        db.session.query(func.count(PaymentReceipt.receipt_id))
+        .join(Subscription,
+              PaymentReceipt.subscription_id == Subscription.subscription_id)
+        .filter(Subscription.member_id == member_id)
+        .scalar() or 0
+    )
+
+    member_certs_count: int = (
+        Certificate.query.filter_by(member_id=member_id).count()
+    )
+
+    return render_template(
+        "dashboard.html",
+        member_subscription   = member_subscription,
+        member_groups         = member_groups,
+        member_receipts_count = member_receipts_count,
+        member_certs_count    = member_certs_count,
+        today                 = today,
+    )
