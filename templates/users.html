@@ -683,6 +683,12 @@ MAIN CONTENT CARD
                             <i class="fa-solid fa-chart-pie me-1"></i> الإحصائيات
                         </a>
                         {% endif %}
+                        {% if current_user.is_admin and user.role.value == 'Member' %}
+                        <a href="{{ url_for('admin_member_stats', member_id=user.user_id) }}"
+                            class="btn btn-sm btn-outline-info" title="عرض إحصائيات المتدرب">
+                            <i class="fa-solid fa-chart-pie me-1"></i> الإحصائيات
+                        </a>
+                        {% endif %}
                     </td>
                     {% endif %}
 

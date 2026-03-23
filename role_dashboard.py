@@ -343,7 +343,68 @@ def _register_role_dashboard_routes(app) -> None:
         sup_students       = stats["my_students"],   # <--- قم بتغيير my_students إلى sup_students
     )
 
+# =========================================================================
+    #  GET /admin/member/<member_id>   ← إحصائيات المتدرب
+    # =========================================================================
 
+    @app.route("/admin/member/<int:member_id>", methods=["GET"])
+    @login_required
+    @_admin_required
+    def admin_member_stats(member_id: int):
+        """
+        Admin-only: render a detailed performance report for one student/member.
+        """
+        # 1. جلب بيانات الطالب
+        member: User | None = db.session.get(User, member_id)
+
+        if member is None:
+            flash(f"المستخدم رقم {member_id} غير موجود.", "danger")
+            return redirect(url_for("users"))
+
+        if member.role != RoleEnum.Member:
+            flash(
+                f"المستخدم '{member.full_name}' ليس طالباً — "
+                f"دوره: {member.role.value}.", "warning",
+            )
+            return redirect(url_for("users"))
+
+        # 2. جلب المجموعات التي ينتمي إليها الطالب
+        from models import GroupMember, Group, Subscription, SubscriptionPlan, Certificate
+        
+        enrolled_groups = (
+            db.session.query(Group, GroupMember)
+            .join(GroupMember, Group.group_id == GroupMember.group_id)
+            .filter(GroupMember.member_id == member_id)
+            .order_by(GroupMember.joined_date.desc())
+            .all()
+        )
+
+        # 3. جلب سجل الاشتراكات الخاص بالطالب
+        subscriptions = (
+            db.session.query(Subscription, SubscriptionPlan)
+            .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
+            .filter(Subscription.member_id == member_id)
+            .order_by(Subscription.end_date.desc())
+            .all()
+        )
+
+        # 4. جلب الشهادات
+        certificates = Certificate.query.filter_by(member_id=member_id).all()
+        
+        # تحويل الشهادات إلى قاموس (Dictionary) لتسهيل البحث عنها برقم المجموعة في الـ HTML
+        cert_dict = {cert.group_id: cert for cert in certificates}
+
+        return render_template(
+            "member_stats.html",
+            member=member,
+            enrolled_groups=enrolled_groups,
+            subscriptions=subscriptions,
+            total_groups=len(enrolled_groups),
+            total_subs=len(subscriptions),
+            total_certs=len(certificates),
+            cert_dict=cert_dict,
+            today=date.today()
+        )
 # ─────────────────────────────────────────────────────────────────────────────
 #  Private dashboard builders
 # ─────────────────────────────────────────────────────────────────────────────

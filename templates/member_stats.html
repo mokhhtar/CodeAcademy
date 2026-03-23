@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block title %}إحصائيات المتدرب: {{ member.full_name }} — أكاديمية شيفرة{% endblock %}
+{% block page_title %}ملف المتدرب{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* نفس تنسيقات صفحة المدرب للحفاظ على هوية بصرية واحدة */
+    .sup-profile-hero {
+        background: linear-gradient(135deg, #0f1f38 0%, #1e2a4a 50%, #0f172a 100%);
+        border: 1px solid var(--surface-border);
+        border-radius: 16px;
+        padding: 28px 32px;
+        margin-bottom: 28px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .sup-big-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2dd4bf, #0ea5e9);
+        /* لون مختلف للطالب */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #fff;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, .3);
+    }
+
+    .sup-name-title {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .sup-email-meta {
+        font-size: .82rem;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .stat-big-value {
+        font-size: 2.4rem;
+        font-weight: 900;
+        line-height: 1;
+        color: var(--text-primary);
+        margin: 10px 0 5px;
+    }
+
+    .stat-big-label {
+        font-size: .8rem;
+        color: var(--text-secondary);
+    }
+
+    /* Subscription Badges */
+    .badge-Active {
+        background: rgba(16, 185, 129, .12);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, .25);
+    }
+
+    .badge-Expired {
+        background: rgba(100, 116, 139, .1);
+        color: #94a3b8;
+        border: 1px solid rgba(100, 116, 139, .22);
+    }
+
+    .badge-Suspended {
+        background: rgba(245, 158, 11, .1);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, .22);
+    }
+
+    .badge-Canceled {
+        background: rgba(239, 68, 68, .1);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, .22);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1 class="page-title">
+            <i class="fa-solid fa-user-graduate me-2" style="color:#2dd4bf;"></i>
+            الملف الأكاديمي للمتدرب
+        </h1>
+        <p class="page-subtitle">نظرة شاملة على اشتراكات ومجموعات وشهادات الطالب</p>
+    </div>
+    <a href="{{ url_for('users') }}" class="btn btn-outline-subtle d-flex align-items-center gap-2"
+        style="height:38px;">
+        <i class="fa-solid fa-arrow-right"></i> رجوع للمستخدمين
+    </a>
+</div>
+
+{# ── Profile Hero ── #}
+<div class="sup-profile-hero">
+    <div class="row align-items-center g-4">
+        <div class="col-auto">
+            <div class="sup-big-avatar">{{ member.fname[0] | upper }}</div>
+        </div>
+        <div class="col" style="position:relative;z-index:1;">
+            <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+                <h2 class="sup-name-title mb-0">{{ member.fname }} {{ member.lname }}</h2>
+            </div>
+            <div class="sup-email-meta">
+                <i class="fa-solid fa-envelope" style="color:#2dd4bf;"></i> {{ member.email }}
+            </div>
+            <div style="margin-top:8px;font-size:.75rem;color:var(--text-muted);">
+                <i class="fa-regular fa-calendar-plus me-1"></i> تاريخ الانضمام:
+                <span style="font-family:var(--font-mono);">{{ member.created_at.strftime('%Y-%m-%d') }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Stat Cards ── #}
+<div class="row g-4 mb-4">
+    <div class="col-12 col-sm-6 col-lg-4">
+        <div class="stat-card h-100">
+            <div class="stat-icon" style="background: rgba(99, 102, 241, .15); color: #818cf8;">
+                <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div class="stat-big-value">{{ total_groups }}</div>
+            <div class="stat-big-label">المجموعات المسجل بها</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-4">
+        <div class="stat-card h-100">
+            <div class="stat-icon" style="background: rgba(45, 212, 191, .15); color: #2dd4bf;">
+                <i class="fa-solid fa-id-card"></i>
+            </div>
+            <div class="stat-big-value">{{ total_subs }}</div>
+            <div class="stat-big-label">إجمالي الاشتراكات</div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-4">
+        <div class="stat-card h-100">
+            <div class="stat-icon stat-icon-amber">
+                <i class="fa-solid fa-certificate"></i>
+            </div>
+            <div class="stat-big-value">{{ total_certs }}</div>
+            <div class="stat-big-label">الشهادات المكتسبة</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# ── Table 1: Subscriptions ── #}
+    <div class="col-12 col-xl-6">
+        <div class="content-card h-100">
+            <div class="content-card-header">
+                <h2 class="content-card-title"><i class="fa-solid fa-id-card"></i> سجل الاشتراكات</h2>
+            </div>
+            {% if subscriptions %}
+            <div class="table-responsive">
+                <table class="table table-dark-custom mb-0">
+                    <thead>
+                        <tr>
+                            <th>الخطة</th>
+                            <th>البداية</th>
+                            <th>النهاية</th>
+                            <th class="text-center">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sub, plan in subscriptions %}
+                        <tr>
+                            <td style="font-weight:600;">{{ plan.plan_name }}</td>
+                            <td style="font-family:var(--font-mono); font-size:.8rem;">{{
+                                sub.start_date.strftime('%Y-%m-%d') }}</td>
+                            <td style="font-family:var(--font-mono); font-size:.8rem;">{{
+                                sub.end_date.strftime('%Y-%m-%d') }}</td>
+                            <td class="text-center">
+                                <span class="badge badge-custom badge-{{ sub.status.value }}">
+                                    {% if sub.status.value == 'Active' %}نشط
+                                    {% elif sub.status.value == 'Expired' %}منتهي
+                                    {% elif sub.status.value == 'Suspended' %}معلق
+                                    {% else %}ملغى{% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding:32px 0;">
+                <p>لا توجد اشتراكات مسجلة.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Table 2: Groups & Certs ── #}
+    <div class="col-12 col-xl-6">
+        <div class="content-card h-100">
+            <div class="content-card-header">
+                <h2 class="content-card-title"><i class="fa-solid fa-layer-group"></i> المجموعات والشهادات</h2>
+            </div>
+            {% if enrolled_groups %}
+            <div class="table-responsive">
+                <table class="table table-dark-custom mb-0">
+                    <thead>
+                        <tr>
+                            <th>المجموعة</th>
+                            <th>تاريخ الانضمام</th>
+                            <th class="text-center">الشهادة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for group, gm in enrolled_groups %}
+                        <tr>
+                            <td style="font-weight:700;">{{ group.group_name }}</td>
+                            <td style="font-family:var(--font-mono); font-size:.8rem; color:var(--text-muted);">
+                                {{ gm.joined_date.strftime('%Y-%m-%d') }}
+                            </td>
+                            <td class="text-center">
+                                {% if group.group_id in cert_dict %}
+                                <span class="badge"
+                                    style="background: rgba(45, 212, 191, .1); color: #2dd4bf; border: 1px solid rgba(45, 212, 191, .2);">
+                                    <i class="fa-solid fa-certificate"></i> مكتسبة
+                                </span>
+                                {% else %}
+                                <span style="font-size:.75rem; color:var(--text-muted);">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding:32px 0;">
+                <p>الطالب غير مسجل في أي مجموعة بعد.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
