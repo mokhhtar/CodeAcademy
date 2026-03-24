@@ -129,6 +129,15 @@ def _register_subscription_routes(app) -> None:
 
         all_subscriptions = query.all()
 
+        # ── Fetch data for the 'New Subscription' Modal (Admin only) ──────
+        members_list = []
+        plans_list = []
+        if current_user.is_admin:
+            # نجلب فقط المستخدمين الذين دورهم "طالب" (Member)
+            members_list = User.query.filter_by(role=RoleEnum.Member).order_by(User.fname).all()
+            # نجلب جميع خطط الاشتراك
+            plans_list = SubscriptionPlan.query.order_by(SubscriptionPlan.price).all()
+
         return render_template(
             "subscriptions.html",
             subscriptions  = all_subscriptions,
@@ -136,6 +145,8 @@ def _register_subscription_routes(app) -> None:
             search_query   = search_query,
             status_choices = list(SubscriptionStatusEnum),
             today          = date.today(),
+            members        = members_list,  # <--- تمت الإضافة هنا
+            plans          = plans_list     # <--- تمت الإضافة هنا
         )
 
 
@@ -357,5 +368,123 @@ def _register_subscription_routes(app) -> None:
                 "تم التراجع عن جميع التغييرات. يرجى المحاولة مجدداً.",
                 "danger",
             )
+
+        return redirect(url_for("subscriptions"))
+        # =========================================================================
+    #  POST /subscriptions/add
+    #  إنشاء اشتراك جديد يدوياً بواسطة الإدارة عبر النافذة المنبثقة
+    # =========================================================================
+
+    @app.route("/subscriptions/add", methods=["POST"])
+    @login_required
+    def add_subscription():
+        # ── الحماية: التأكد من أن المدير فقط من يمكنه التنفيذ ─────────────
+        if not current_user.is_admin:
+            flash("إضافة الاشتراكات مخصصة للإدارة فقط.", "danger")
+            return redirect(url_for("subscriptions"))
+
+        # ── استقبال البيانات وتأمينها (Type Casting) ─────────────────────
+        member_id = request.form.get("member_id", type=int)
+        plan_id = request.form.get("plan_id", type=int)
+        amount_paid = request.form.get("amount_paid", type=float)
+        notes = request.form.get("notes", "").strip()
+
+        # ── التحقق من عدم وجود حقول فارغة ───────────────────────────────
+        if not member_id or not plan_id or amount_paid is None:
+            flash("يرجى تعبئة جميع الحقول المطلوبة.", "warning")
+            return redirect(url_for("subscriptions"))
+
+        # ── التأكد من وجود الطالب والخطة في قاعدة البيانات (منع الثغرات) ──
+        member = db.session.get(User, member_id)
+        plan = db.session.get(SubscriptionPlan, plan_id)
+
+        if not member or not member.is_member:
+            flash("الطالب المحدد غير صالح أو غير موجود.", "danger")
+            return redirect(url_for("subscriptions"))
+        
+        if not plan:
+            flash("الخطة المحددة غير صالحة.", "danger")
+            return redirect(url_for("subscriptions"))
+
+        if amount_paid < 0:
+            flash("لا يمكن أن يكون المبلغ المدفوع بالسالب.", "danger")
+            return redirect(url_for("subscriptions"))
+
+        # ── التحقق من وجود اشتراك نشط — تحويل تلقائي إلى تجديد ──────────
+        today = date.today()
+
+        active_sub = (
+            Subscription.query
+            .filter_by(member_id=member.user_id, status=SubscriptionStatusEnum.Active)
+            .first()
+        )
+
+        if active_sub:
+            # ── تجديد الاشتراك الحالي بدلاً من إنشاء سجل جديد ──────────
+            base_date   = active_sub.end_date if active_sub.end_date >= today else today
+            new_end_date = base_date + relativedelta(months=plan.duration_months)
+
+            try:
+                old_end_date        = active_sub.end_date
+                active_sub.end_date = new_end_date
+
+                renewal_receipt = PaymentReceipt(
+                    subscription_id = active_sub.subscription_id,
+                    amount_paid     = amount_paid,
+                    payment_date    = today,
+                    payment_type    = PaymentTypeEnum.Renewal,
+                    notes           = (
+                        notes or
+                        f"تجديد تلقائي (تحويل من طلب اشتراك جديد) بواسطة {current_user.full_name}"
+                        f" — من {old_end_date} إلى {new_end_date}"
+                    ),
+                )
+                db.session.add(renewal_receipt)
+                db.session.commit()
+
+                flash(
+                    "تم تحويل طلبك تلقائياً إلى عملية تجديد لأن الطالب لديه اشتراك نشط بالفعل، "
+                    "وتمت إضافة المدة بنجاح.",
+                    "success",
+                )
+
+            except Exception as exc:
+                db.session.rollback()
+                app.logger.error(f"Auto-renewal failed for member {member.user_id}: {exc}")
+                flash("حدث خطأ أثناء تحويل الطلب إلى تجديد. يرجى المحاولة مجدداً.", "danger")
+
+            return redirect(url_for("subscriptions"))
+
+        # ── لا يوجد اشتراك نشط — إنشاء اشتراك جديد ─────────────────────
+        end_date = today + relativedelta(months=plan.duration_months)
+
+        try:
+            new_sub = Subscription(
+                member_id=member.user_id,
+                plan_id=plan.plan_id,
+                start_date=today,
+                end_date=end_date,
+                status=SubscriptionStatusEnum.Active
+            )
+            db.session.add(new_sub)
+            db.session.flush()  # للحصول على الـ ID الخاص بالاشتراك الجديد
+
+            # إنشاء وصل الدفع (Receipt)
+            receipt = PaymentReceipt(
+                subscription_id=new_sub.subscription_id,
+                amount_paid=amount_paid,
+                payment_date=today,
+                payment_type=PaymentTypeEnum.New,
+                notes=notes or f"اشتراك جديد يدوي بواسطة {current_user.full_name}"
+            )
+            db.session.add(receipt)
+
+            db.session.commit()
+            flash(f"تم إنشاء اشتراك جديد بنجاح للطالب {member.full_name} 🎯", "success")
+        
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error(f"Error adding manual subscription: {exc}")
+            flash("حدث خطأ في النظام أثناء إنشاء الاشتراك. يرجى المحاولة مجدداً.", "danger")
 
         return redirect(url_for("subscriptions"))

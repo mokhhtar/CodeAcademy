@@ -270,6 +270,71 @@ search_query, viewer_role
             display: none !important;
         }
     }
+
+    /* ── تخصيص القوائم المنسدلة وحقل البحث الذكي ── */
+    .custom-select-wrapper {
+        position: relative;
+    }
+
+    .cert-custom-input,
+    #certGroupId {
+        background-color: #111827 !important;
+        /* لون خلفية داكن وأنيق */
+        border: 1px solid #374151 !important;
+        color: #fff !important;
+        padding: 10px 14px;
+        border-radius: 9px !important;
+        font-family: var(--font-arabic);
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .cert-custom-input:focus {
+        border-color: #2dd4bf !important;
+        box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15) !important;
+    }
+
+    #certGroupId:focus {
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15) !important;
+    }
+
+    .cert-custom-input::placeholder {
+        color: #6b7280 !important;
+    }
+
+    /* قائمة نتائج البحث (الطلاب) والـ Options */
+    .cert-custom-dropdown {
+        background-color: #3f4e63;
+        border: 1px solid #374151;
+        max-height: 220px;
+        overflow-y: auto;
+        border-radius: 9px;
+        margin-top: 4px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    .cert-custom-dropdown .dropdown-item {
+        color: #e5e7eb;
+        padding: 10px 14px;
+        font-family: var(--font-arabic);
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .cert-custom-dropdown .dropdown-item:hover {
+        background-color: rgba(45, 212, 191, 0.15);
+        color: #2dd4bf !important;
+    }
+
+    .student-opt.hidden {
+        display: none !important;
+    }
+
+    #certGroupId option {
+        background-color: #1f2937;
+        color: #fff;
+        padding: 8px;
+    }
 </style>
 {% endblock %}
 
@@ -286,13 +351,13 @@ search_query, viewer_role
         <p class="page-subtitle">شهادات إتمام المسارات البرمجية الصادرة للطلاب</p>
     </div>
 
-    {# Supervisors and Admins can issue a new certificate #}
+    {# Admins and Supervisors can issue a new certificate #}
     {% if viewer_role in ('Admin', 'Supervisor') %}
-    <a href="#" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
-        aria-label="إصدار شهادة جديدة">
+    <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        data-bs-toggle="modal" data-bs-target="#issueCertModal" aria-label="إصدار شهادة جديدة">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         إصدار شهادة
-    </a>
+    </button>
     {% endif %}
 </div>
 
@@ -512,6 +577,100 @@ MAIN CONTENT CARD
 
 </div>{# /.content-card #}
 
+
+{# ════════════════════════════════════════════════════════════════════════════
+ISSUE CERTIFICATE MODAL (Admin + Supervisor only)
+════════════════════════════════════════════════════════════════════════════ #}
+{% if viewer_role in ('Admin', 'Supervisor') %}
+<div class="modal fade" id="issueCertModal" tabindex="-1" aria-labelledby="issueCertModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content"
+            style="background:var(--surface-bg);border:1px solid var(--surface-border);border-radius:14px;">
+
+            {# ── Header ── #}
+            <div class="modal-header" style="border-bottom:1px solid var(--surface-border);">
+                <h5 class="modal-title fw-bold" id="issueCertModalLabel"
+                    style="color:var(--text-primary);font-family:var(--font-arabic);">
+                    <i class="fa-solid fa-certificate me-2" style="color:#f59e0b;"></i>
+                    إصدار شهادة جديدة
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="إغلاق"></button>
+            </div>
+
+            {# ── Body ── #}
+            <form method="POST" action="{{ url_for('issue_certificate') }}" id="issueCertForm">
+                <div class="modal-body" style="padding:24px 28px;">
+
+                    {# ── Student select (Searchable Custom UI) ───────────────────── #}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" style="color:var(--text-secondary);font-size:.85rem;">
+                            <i class="fa-solid fa-user-graduate me-1" style="color:#2dd4bf;"></i>
+                            ابحث عن الطالب
+                        </label>
+
+                        <div class="custom-select-wrapper">
+                            <input type="text" id="studentSearchInput"
+                                class="form-control form-control-sm cert-custom-input"
+                                placeholder="— اكتب اسم الطالب أو بريده الإلكتروني —" autocomplete="off" required>
+
+                            <ul id="studentDropdownList" class="dropdown-menu w-100 cert-custom-dropdown">
+                                {% for m in members_list %}
+                                <li>
+                                    <a class="dropdown-item student-opt" href="#" data-value="{{ m.user_id }}">
+                                        {{ m.fname }} {{ m.lname }} <span class="text-muted ms-1"
+                                            style="font-size:0.8em">({{ m.email }})</span>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+
+                            <select name="member_id" id="certMemberId" class="d-none" required>
+                                <option value="" disabled selected></option>
+                                {% for m in members_list %}
+                                <option value="{{ m.user_id }}"
+                                    data-groups="{{ m.group_memberships | map(attribute='group_id') | list | join(',') }}">
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {# ── Group select ────────────────────────────────────────────── #}
+                    <div class="mb-2">
+                        <label for="certGroupId" class="form-label fw-semibold"
+                            style="color:var(--text-secondary);font-size:.85rem;">
+                            <i class="fa-solid fa-layer-group me-1" style="color:#818cf8;"></i>
+                            المسار / المجموعة
+                        </label>
+                        <select name="group_id" id="certGroupId" required class="form-select form-select-sm">
+                            <option value="" disabled selected>— اختر الطالب أولاً —</option>
+                            {% for g in groups_list %}
+                            <option value="{{ g.group_id }}">{{ g.group_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div id="enrollmentHint" class="form-text"
+                            style="font-size:.78rem;color:var(--text-muted);margin-top:6px;"></div>
+                    </div>
+
+                </div>{# /.modal-body #}
+
+                {# ── Footer ── #}
+                <div class="modal-footer" style="border-top:1px solid var(--surface-border);padding:16px 24px;">
+                    <button type="button" class="btn btn-outline-subtle btn-sm" data-bs-dismiss="modal">
+                        <i class="fa-solid fa-xmark me-1"></i> إلغاء
+                    </button>
+                    <button type="submit" id="issueCertSubmit" class="btn btn-accent btn-sm" disabled>
+                        <i class="fa-solid fa-stamp me-1"></i> إصدار الشهادة
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 
@@ -519,6 +678,123 @@ MAIN CONTENT CARD
 <script>
     (function () {
         'use strict';
+
+        /* ── Issue Certificate Modal Logic (With Searchable Student) ── */
+        (function initIssueCertModal() {
+            const modalEl = document.getElementById('issueCertModal');
+            if (modalEl) {
+                document.body.appendChild(modalEl);
+            }
+            const memberSel = document.getElementById('certMemberId');
+            const groupSel = document.getElementById('certGroupId');
+            const submitBtn = document.getElementById('issueCertSubmit');
+            const hint = document.getElementById('enrollmentHint');
+
+            // Custom Search Elements
+            const searchInput = document.getElementById('studentSearchInput');
+            const dropdownList = document.getElementById('studentDropdownList');
+            const items = dropdownList ? dropdownList.querySelectorAll('.student-opt') : [];
+
+            if (!memberSel || !groupSel) return;
+
+            const allGroupOptions = Array.from(groupSel.options).filter(o => o.value !== '');
+
+            // 1. منطق البحث الذكي عن الطالب
+            if (searchInput && dropdownList) {
+                // إظهار القائمة عند التركيز
+                searchInput.addEventListener('focus', () => dropdownList.classList.add('show'));
+
+                // إخفاء القائمة عند النقر خارجها
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.custom-select-wrapper')) {
+                        dropdownList.classList.remove('show');
+                    }
+                });
+
+                // تصفية النتائج عند الكتابة
+                searchInput.addEventListener('input', function () {
+                    dropdownList.classList.add('show');
+                    const term = this.value.toLowerCase();
+
+                    items.forEach(item => {
+                        const text = item.textContent.toLowerCase();
+                        if (text.includes(term)) {
+                            item.classList.remove('hidden');
+                        } else {
+                            item.classList.add('hidden');
+                        }
+                    });
+                });
+
+                // عند اختيار طالب من القائمة
+                items.forEach(item => {
+                    item.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        // كتابة اسم الطالب فقط في حقل الإدخال
+                        searchInput.value = this.textContent.split('(')[0].trim();
+                        // تحديث القيمة المخفية للـ Select الأصلي
+                        memberSel.value = this.dataset.value;
+                        dropdownList.classList.remove('show');
+
+                        // إطلاق حدث التغيير لجلب مجموعات الطالب
+                        memberSel.dispatchEvent(new Event('change'));
+                    });
+                });
+            }
+
+            // 2. تحديث قائمة المجموعات بناءً على الطالب المختار
+            function updateGroups() {
+                const selectedValue = memberSel.value;
+                const selectedOpt = Array.from(memberSel.options).find(o => o.value === selectedValue);
+                const rawGroups = selectedOpt ? (selectedOpt.dataset.groups || '') : '';
+                const allowed = new Set(rawGroups.split(',').filter(Boolean));
+
+                groupSel.innerHTML = '<option value="" disabled selected>— اختر المسار —</option>';
+
+                let count = 0;
+                allGroupOptions.forEach(function (opt) {
+                    if (allowed.has(String(opt.value))) {
+                        groupSel.appendChild(opt.cloneNode(true));
+                        count++;
+                    }
+                });
+
+                if (count === 0 && memberSel.value) {
+                    hint.textContent = 'هذا الطالب غير مسجّل في أي مسار ضمن صلاحياتك.';
+                    hint.style.color = '#f87171';
+                } else if (count === 1) {
+                    groupSel.selectedIndex = 1;
+                    hint.textContent = '';
+                } else {
+                    hint.textContent = '';
+                }
+                validateForm();
+            }
+
+            function validateForm() {
+                submitBtn.disabled = !(memberSel.value && groupSel.value);
+            }
+
+            memberSel.addEventListener('change', updateGroups);
+            groupSel.addEventListener('change', validateForm);
+
+            // 3. إعادة تعيين البيانات عند إغلاق النافذة
+            const modal = document.getElementById('issueCertModal');
+            if (modal) {
+                modal.addEventListener('hidden.bs.modal', function () {
+                    document.getElementById('issueCertForm').reset();
+                    if (searchInput) searchInput.value = ''; // تنظيف حقل البحث
+                    items.forEach(item => item.classList.remove('hidden')); // إرجاع جميع النتائج
+
+                    groupSel.innerHTML = '<option value="" disabled selected>— اختر الطالب أولاً —</option>';
+                    allGroupOptions.forEach(o => groupSel.appendChild(o.cloneNode(true)));
+                    hint.textContent = '';
+                    submitBtn.disabled = true;
+                });
+            }
+        })();
+
+        /* ───────────────────────────────────────────────────────────────── */
 
         const searchInput = document.getElementById('tableSearch');
         const clearBtn = document.getElementById('clearSearch');

@@ -12,6 +12,7 @@ status_filter, search_query, status_choices, today
 {% block page_title %}الاشتراكات{% endblock %}
 
 {% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/choices.min.css') }}" />
 <style>
     /* ── Status badge map ──────────────────────────────────────────────── */
     .badge-active {
@@ -463,6 +464,59 @@ status_filter, search_query, status_choices, today
             /* Often best to just hide the # column on mobile cards */
         }
     }
+
+    /* ── الحقل الرئيسي (قبل الفتح) ── */
+    .choices[data-type*="select-one"] .choices__inner {
+        background-color: var(--surface-input);
+        border: 1px solid var(--surface-border);
+        color: var(--text-primary);
+        border-radius: var(--btn-radius);
+        padding-bottom: 0px;
+        min-height: 44px;
+        /* ليتناسب مع ارتفاع حقول Bootstrap */
+    }
+
+    /* ── القائمة المنسدلة (الحاوية) ── */
+    .choices__list--dropdown,
+    .choices__list[aria-expanded] {
+        background-color: var(--surface-card);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--btn-radius);
+        margin-top: 5px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        /* ظل غامق */
+        z-index: 1055;
+        /* لتظهر فوق النافذة المنبثقة */
+    }
+
+    /* ── حقل البحث الداخلي ── */
+    .choices__list--dropdown .choices__input {
+        background-color: var(--surface-bg) !important;
+        /* خلفية داكنة لخانة البحث */
+        color: var(--text-primary) !important;
+        /* نص فاتح يسهل قراءته */
+        border: 1px solid var(--surface-border) !important;
+        border-radius: 6px !important;
+        margin-bottom: 10px;
+    }
+
+    /* تغيير لون النص المؤقت (Placeholder) في حقل البحث */
+    .choices__list--dropdown .choices__input::placeholder {
+        color: var(--text-muted);
+    }
+
+    /* ── عناصر القائمة (الطلاب) ── */
+    .choices__list--dropdown .choices__item--selectable {
+        color: var(--text-secondary);
+        padding-right: 15px;
+        /* لتتناسب مع اللغة العربية */
+    }
+
+    /* ── عند تمرير الماوس أو تحديد العنصر بالأسهم ── */
+    .choices__list--dropdown .choices__item--selectable.is-highlighted {
+        background-color: var(--surface-sidebar-hover);
+        color: var(--brand-accent);
+    }
 </style>
 {% endblock %}
 
@@ -480,11 +534,19 @@ status_filter, search_query, status_choices, today
             عرض وتعديل جميع اشتراكات الطلاب — تجديد، تعليق، إلغاء
         </p>
     </div>
-    <a href="{% if current_user.is_member %}{{ url_for('checkout') }}{% else %}#{% endif %}"
-        class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;" aria-label="إضافة اشتراك جديد">
+    {% if current_user.is_admin %}
+    <button type="button" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        data-bs-toggle="modal" data-bs-target="#newSubscriptionModal">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        اشتراك جديد
+    </button>
+    {% elif current_user.is_member %}
+    <a href="{{ url_for('checkout') }}" class="btn btn-accent d-flex align-items-center gap-2" style="height:40px;"
+        aria-label="إضافة اشتراك جديد">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         اشتراك جديد
     </a>
+    {% endif %}
 </div>
 
 
@@ -1107,4 +1169,147 @@ SCRIPTS — Real-time client-side search + column sort
 
     })();
 </script>
+{# ════════════════════════════════════════════════════════════════════════════
+MODAL: إنشاء اشتراك جديد (يظهر للمدير فقط)
+════════════════════════════════════════════════════════════════════════════ #}
+{% if current_user.is_admin %}
+<div class="modal fade" id="newSubscriptionModal" tabindex="-1" aria-labelledby="newSubLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content"
+            style="background: var(--surface-card); border: 1px solid var(--surface-border); border-radius: 16px;">
+            <form action="{{ url_for('add_subscription') }}" method="POST">
+
+                <div class="modal-header" style="border-bottom: 1px solid var(--surface-border);">
+                    <h5 class="modal-title" id="newSubLabel">
+                        <i class="fa-solid fa-user-plus me-2" style="color:#2dd4bf;"></i> إضافة اشتراك جديد
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="إغلاق"></button>
+                </div>
+
+                <div class="modal-body">
+                    {# اختيار الطالب #}
+                    <div class="mb-3">
+                        <label for="memberSelect" class="form-label text-light">اختر الطالب</label>
+                        <select name="member_id" id="memberSelect" class="form-select" required>
+                            <option value="" disabled selected>ابحث عن طالب...</option>
+                            {% for member in members %}
+                            <option value="{{ member.user_id }}">{{ member.fname }} {{ member.lname }} ({{ member.email
+                                }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# اختيار الخطة #}
+                    <div class="mb-3">
+                        <label for="plan_id" class="form-label"
+                            style="font-size: .85rem; color: var(--text-secondary);">الخطة <span
+                                class="text-danger">*</span></label>
+                        <select class="form-select bg-dark text-white border-secondary" id="plan_id" name="plan_id"
+                            required onchange="updateAmount(this)">
+                            <option value="" data-price="">-- اختر الخطة --</option>
+                            {% for p in plans %}
+                            <option value="{{ p.plan_id }}" data-price="{{ p.price }}">
+                                {{ p.plan_name }} ({{ p.duration_months }} شهر) — {{ "{:,.0f}".format(p.price | float)
+                                }} دج
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# المبلغ المدفوع #}
+                    <div class="mb-3">
+                        <label for="amount_paid" class="form-label"
+                            style="font-size: .85rem; color: var(--text-secondary);">المبلغ المدفوع (دج) <span
+                                class="text-danger">*</span></label>
+                        <input type="number" step="0.01" class="form-control bg-dark text-white border-secondary"
+                            id="amount_paid" name="amount_paid" required placeholder="0.00">
+                        <div class="form-text text-muted" style="font-size: .7rem;">سيتغير تلقائياً حسب الخطة، ويمكنك
+                            تعديله يدوياً في حال وجود خصم.</div>
+                    </div>
+
+                    {# ملاحظات (مثال: طريقة الدفع) #}
+                    <div class="mb-3">
+                        <label for="notes" class="form-label"
+                            style="font-size: .85rem; color: var(--text-secondary);">ملاحظات الدفع (اختياري)</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="notes"
+                            name="notes" placeholder="مثال: دفع نقداً، أو عبر BaridiMob...">
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="border-top: 1px solid var(--surface-border);">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-accent"><i class="fa-solid fa-check"></i> تأكيد وحفظ</button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+{# سكربت بسيط لتحديث حقل السعر تلقائياً عند اختيار الخطة #}
+<script>
+    function updateAmount(selectElement) {
+        const selectedOption = selectElement.options[selectElement.selectedIndex];
+        const price = selectedOption.getAttribute('data-price');
+        const amountInput = document.getElementById('amount_paid');
+
+        if (price) {
+            amountInput.value = parseFloat(price);
+        } else {
+            amountInput.value = '';
+        }
+    }
+</script>
+<script src="{{ url_for('static', filename='js/choices.min.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // استهداف القائمة المنسدلة الخاصة بالطلاب
+        const memberSelectElement = document.getElementById('memberSelect');
+
+        // تفعيل مكتبة Choices عليها
+        if (memberSelectElement) {
+            new Choices(memberSelectElement, {
+                searchEnabled: true,
+                searchFuzzy: false,
+                searchPlaceholderValue: '🔍 ابحث بالاسم أو البريد الإلكتروني...',
+                itemSelectText: 'اضغط للاختيار',
+                noResultsText: 'لا يوجد طالب بهذا الاسم',
+                allowHTML: true,
+                shouldSort: false, // للحفاظ على الترتيب القادم من قاعدة البيانات
+                fuseOptions: {
+                    threshold: 0.0,       // 0.0 تعني تطابق تام 100% للحروف المتتالية (يمنع تناثر الحروف)
+                    ignoreLocation: true, // السماح بإيجاد الكلمة سواء كانت في أول الاسم أو وسطه أو آخره
+                    tokenize: false       // منع المحرك من تقسيم الكلمة المكتوبة إلى أجزاء
+                }
+            });
+        }
+    });
+</script>
+
+<style>
+    /* تعديل بسيط ليتناسب لون المكتبة مع الثيم الداكن (Dark Mode) الخاص بك */
+    .choices__inner {
+        background-color: var(--surface-input);
+        border: 1px solid var(--surface-border);
+        color: var(--text-primary);
+        border-radius: var(--card-radius);
+    }
+
+    .choices__list--dropdown {
+        background-color: var(--surface-card);
+        border-color: var(--surface-border);
+        color: var(--text-secondary);
+    }
+
+    .choices__input {
+        background-color: transparent;
+        color: var(--text-primary);
+    }
+
+    .choices__list--dropdown .choices__item--selectable.is-highlighted {
+        background-color: var(--surface-sidebar-hover);
+    }
+</style>
+{% endif %}
 {% endblock %}

@@ -1234,7 +1234,7 @@ STUDENTS TABLE
 
                         {% else %}
                         {# Issue new certificate #}
-                        <form method="POST" action="{{ url_for('issue_certificate',
+                        <form method="POST" action="{{ url_for('issue_certificate_dashboard',
                                          member_id=row.member.user_id,
                                          group_id=row.group.group_id) }}" onsubmit="return confirm(
                         'إصدار شهادة إتمام المسار للطالب\n{{ row.member.fname }} {{ row.member.lname }}\nفي مجموعة: {{ row.group.group_name }}؟'

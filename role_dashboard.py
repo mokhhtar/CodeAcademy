@@ -213,7 +213,7 @@ def _register_role_dashboard_routes(app) -> None:
     )
     @login_required
     @_supervisor_required
-    def issue_certificate(member_id: int, group_id: int):
+    def issue_certificate_dashboard(member_id: int, group_id: int):
 
         member: User | None = db.session.get(User, member_id)
         if member is None or not member.is_member:

@@ -28,6 +28,7 @@ from sqlalchemy.orm import aliased
 from models import (
     Certificate,
     Group,
+    GroupMember,
     PaymentReceipt,
     RoleEnum,
     Subscription,
@@ -220,9 +221,48 @@ def _register_list_routes(app) -> None:
             .all()
         )
 
+        # ── Data for "Issue Certificate" modal (Admin & Supervisor only) ──
+        members_list: list = []
+        groups_list:  list = []
+
+        if current_user.is_admin:
+            # Admin: all students enrolled in any group
+            members_list = (
+                db.session.query(User)
+                .join(GroupMember, GroupMember.member_id == User.user_id)
+                .filter(User.role == RoleEnum.Member)
+                .distinct()
+                .order_by(User.fname)
+                .all()
+            )
+            groups_list = Group.query.order_by(Group.group_name).all()
+
+        elif current_user.is_supervisor:
+            # Supervisor: only students in their own groups
+            members_list = (
+                db.session.query(User)
+                .join(GroupMember, GroupMember.member_id == User.user_id)
+                .join(Group, Group.group_id == GroupMember.group_id)
+                .filter(
+                    User.role == RoleEnum.Member,
+                    Group.supervisor_id == current_user.user_id,
+                )
+                .distinct()
+                .order_by(User.fname)
+                .all()
+            )
+            groups_list = (
+                Group.query
+                .filter_by(supervisor_id=current_user.user_id)
+                .order_by(Group.group_name)
+                .all()
+            )
+
         return render_template(
             "certificates.html",
-            certificates = results,
-            search_query = search_query,
-            viewer_role  = current_user.role.value,
+            certificates  = results,
+            search_query  = search_query,
+            viewer_role   = current_user.role.value,
+            members_list  = members_list,
+            groups_list   = groups_list,
         )
