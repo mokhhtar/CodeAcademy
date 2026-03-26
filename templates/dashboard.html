@@ -477,81 +477,130 @@ today
     </a>
 </div>
 
-{# 4 KPI cards #}
-<div class="row g-4 mb-4" id="stat-cards-row">
-    {% set monthly_pct = ((active_monthly / total_active * 100)|int) if total_active > 0 else 0 %}
-    {% set yearly_pct = ((active_yearly / total_active * 100)|int) if total_active > 0 else 0 %}
-    {% set all_subs = total_active + total_expired + total_suspended + total_canceled %}
-    {% set expired_pct = ((total_expired / all_subs * 100)|int) if all_subs > 0 else 0 %}
+{# ══ KPI Cards — dynamic plan breakdown + fixed stats ══════════════════ #}
+{# plan_stats: list[(plan_name, count)] from GROUP BY query in backend #}
+{% set all_subs = total_active + total_expired + total_suspended + total_canceled %}
+{% set expired_pct = ((total_expired / all_subs * 100)|int) if all_subs > 0 else 0 %}
+
+{# Colour palette cycles for plan cards — supports unlimited plans #}
+{% set _plan_palette = [
+('stat-icon-teal', '#2dd4bf', 'fa-calendar-check'),
+('stat-icon-indigo', '#818cf8', 'fa-star'),
+('stat-icon-emerald','#34d399', 'fa-calendar-days'),
+('stat-icon-sky', '#38bdf8', 'fa-calendar-week'),
+('stat-icon-amber', '#fbbf24', 'fa-calendar-plus'),
+('stat-icon-rose', '#f87171', 'fa-calendar-xmark'),
+] %}
+
+<div class="row g-4 mb-4" id="stat-cards-row" aria-label="بطاقات الإحصائيات الرئيسية">
+
+    {# ── Dynamic: one card per active-plan row returned by GROUP BY ──── #}
+    {% for plan_name, count in plan_stats %}
+    {% set pi = loop.index0 % (_plan_palette | length) %}
+    {% set icon_cls = _plan_palette[pi][0] %}
+    {% set bar_color = _plan_palette[pi][1] %}
+    {% set icon_name = _plan_palette[pi][2] %}
+    {% set plan_pct = ((count / total_active * 100)|int) if total_active > 0 else 0 %}
+    {% set anim_delay = loop.index0 * 80 %}
 
     <div class="col-12 col-sm-6 col-xl-3">
-        <div class="stat-card" data-delay="0">
+        <div class="stat-card" data-delay="{{ anim_delay }}" role="region" aria-label="اشتراكات {{ plan_name }} النشطة">
             <div class="d-flex align-items-start justify-content-between">
-                <div class="stat-icon stat-icon-teal"><i class="fa-solid fa-calendar-check"></i></div>
-                <span class="badge badge-custom badge-active">نشط</span>
+                <div class="stat-icon {{ icon_cls }}" aria-hidden="true">
+                    <i class="fa-solid {{ icon_name }}"></i>
+                </div>
+                <span class="badge badge-custom badge-active" aria-label="نشط">نشط</span>
             </div>
-            <div class="stat-value mt-3" data-target="{{ active_monthly }}">{{ active_monthly }}</div>
-            <div class="stat-label">اشتراكات شهرية نشطة</div>
-            <div class="mini-bar mt-2">
-                <div class="mini-bar-fill" style="width:{{ monthly_pct }}%;background:#2dd4bf;"></div>
+            <div class="stat-value mt-3" data-target="{{ count }}" aria-label="{{ count }} اشتراك">{{ count }}</div>
+            <div class="stat-label">
+                اشتراكات ({{ plan_name }}) نشطة
             </div>
-            <div class="stat-trend mt-1"><span class="trend-flat"><i class="fa-solid fa-chart-simple"></i> {{
-                    monthly_pct }}% من النشطة</span></div>
+            <div class="mini-bar mt-2" aria-hidden="true">
+                <div class="mini-bar-fill" style="width:{{ plan_pct }}%;background:{{ bar_color }};"></div>
+            </div>
+            <div class="stat-trend mt-1">
+                <span class="trend-flat">
+                    <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+                    {{ plan_pct }}% من النشطة
+                </span>
+            </div>
         </div>
     </div>
 
+    {% else %}
+    {# Fallback when there are no active subscriptions at all #}
     <div class="col-12 col-sm-6 col-xl-3">
-        <div class="stat-card" data-delay="80">
-            <div class="d-flex align-items-start justify-content-between">
-                <div class="stat-icon stat-icon-indigo"><i class="fa-solid fa-star"></i></div>
-                <span class="badge badge-custom badge-active">نشط</span>
+        <div class="stat-card" data-delay="0" role="region" aria-label="لا توجد اشتراكات نشطة">
+            <div class="stat-icon stat-icon-teal" aria-hidden="true">
+                <i class="fa-solid fa-calendar-check"></i>
             </div>
-            <div class="stat-value mt-3" data-target="{{ active_yearly }}">{{ active_yearly }}</div>
-            <div class="stat-label">اشتراكات سنوية نشطة</div>
-            <div class="mini-bar mt-2">
-                <div class="mini-bar-fill" style="width:{{ yearly_pct }}%;background:#818cf8;"></div>
+            <div class="stat-value mt-3" data-target="0">0</div>
+            <div class="stat-label">اشتراكات نشطة</div>
+            <div class="stat-trend mt-1">
+                <span class="trend-flat">لا توجد اشتراكات نشطة حالياً</span>
             </div>
-            <div class="stat-trend mt-1"><span class="trend-up"><i class="fa-solid fa-chart-simple"></i> {{ yearly_pct
-                    }}% من النشطة</span></div>
         </div>
     </div>
+    {% endfor %}
 
+    {# ── Fixed card: Expired subscriptions ──────────────────────────── #}
     <div class="col-12 col-sm-6 col-xl-3">
-        <div class="stat-card" data-delay="160">
+        <div class="stat-card" data-delay="{{ (plan_stats | length) * 80 }}" role="region"
+            aria-label="الاشتراكات المنتهية">
             <div class="d-flex align-items-start justify-content-between">
-                <div class="stat-icon stat-icon-rose"><i class="fa-solid fa-hourglass-end"></i></div>
+                <div class="stat-icon stat-icon-rose" aria-hidden="true">
+                    <i class="fa-solid fa-hourglass-end"></i>
+                </div>
                 <span class="badge badge-custom badge-expired">منتهي</span>
             </div>
-            <div class="stat-value mt-3" data-target="{{ total_expired }}">{{ total_expired }}</div>
+            <div class="stat-value mt-3" data-target="{{ total_expired }}"
+                aria-label="{{ total_expired }} اشتراك منتهٍ">
+                {{ total_expired }}
+            </div>
             <div class="stat-label">اشتراكات منتهية</div>
-            <div class="mini-bar mt-2">
+            <div class="mini-bar mt-2" aria-hidden="true">
                 <div class="mini-bar-fill" style="width:{{ expired_pct }}%;background:#f87171;"></div>
             </div>
-            <div class="stat-trend mt-1"><span class="trend-down"><i class="fa-solid fa-arrow-trend-down"></i> {{
-                    expired_pct }}% من الإجمالي</span></div>
+            <div class="stat-trend mt-1">
+                <span class="trend-down">
+                    <i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i>
+                    {{ expired_pct }}% من الإجمالي
+                </span>
+            </div>
         </div>
     </div>
 
+    {# ── Fixed card: Renewals + Revenue ──────────────────────────────── #}
     <div class="col-12 col-sm-6 col-xl-3">
-        <div class="stat-card" data-delay="240">
+        <div class="stat-card" data-delay="{{ (plan_stats | length) * 80 + 80 }}" role="region"
+            aria-label="تجديدات هذا الشهر">
             <div class="d-flex align-items-start justify-content-between">
-                <div class="stat-icon stat-icon-amber"><i class="fa-solid fa-arrows-rotate"></i></div>
-                <span class="badge badge-custom"
-                    style="background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.25);">هذا
-                    الشهر</span>
+                <div class="stat-icon stat-icon-amber" aria-hidden="true">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </div>
+                <span class="badge badge-custom" style="background:rgba(245,158,11,.15);color:#fbbf24;
+                     border:1px solid rgba(245,158,11,.25);">
+                    هذا الشهر
+                </span>
             </div>
-            <div class="stat-value mt-3" data-target="{{ renewals_this_month }}">{{ renewals_this_month }}</div>
+            <div class="stat-value mt-3" data-target="{{ renewals_this_month }}"
+                aria-label="{{ renewals_this_month }} تجديد">
+                {{ renewals_this_month }}
+            </div>
             <div class="stat-label">تجديدات مسجّلة هذا الشهر</div>
-            <div class="stat-trend mt-3 pt-1" style="border-top:1px solid var(--surface-border);">
-                <i class="fa-solid fa-circle-dollar-to-slot me-1 text-success"></i>
+            <div class="stat-trend mt-3 pt-1" style="border-top:1px solid var(--surface-border);"
+                aria-label="إيرادات الشهر {{ '{:,.0f}'.format(revenue_this_month) }} دج">
+                <i class="fa-solid fa-circle-dollar-to-slot me-1 text-success" aria-hidden="true"></i>
                 <span style="color:var(--text-secondary);font-size:.8rem;">الإيرادات: </span>
-                <span class="revenue-amount" style="font-size:1rem;"><span
-                        style="font-size:.72rem;color:var(--text-muted);">دج</span>{{
-                    "{:,.0f}".format(revenue_this_month) }}</span>
+                <span class="revenue-amount" style="font-size:1rem;">
+                    <span style="font-size:.72rem;color:var(--text-muted);">دج</span>
+                    {{ "{:,.0f}".format(revenue_this_month) }}
+                </span>
             </div>
         </div>
     </div>
-</div>
+
+</div>{# /.row KPI cards #}
 
 {# Summary + quick stats #}
 <div class="row g-4 mb-4">
@@ -1234,7 +1283,7 @@ STUDENTS TABLE
 
                         {% else %}
                         {# Issue new certificate #}
-                        <form method="POST" action="{{ url_for('issue_certificate_dashboard',
+                        <form method="POST" action="{{ url_for('issue_certificate',
                                          member_id=row.member.user_id,
                                          group_id=row.group.group_id) }}" onsubmit="return confirm(
                         'إصدار شهادة إتمام المسار للطالب\n{{ row.member.fname }} {{ row.member.lname }}\nفي مجموعة: {{ row.group.group_name }}؟'

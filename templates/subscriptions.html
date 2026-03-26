@@ -785,7 +785,7 @@ MAIN CONTENT CARD
                             {{ status_ar }}
                         </span>
                     </td>
-
+                    {% if current_user.is_admin %}
                     {# ── Actions Dropdown ─────────────────────────────────────── #}
                     <td class="text-center" data-label="إجراءات">
                         <div class="dropdown" role="group" aria-label="إجراءات اشتراك {{ member.fname }}">
@@ -873,6 +873,9 @@ MAIN CONTENT CARD
                             </ul>
                         </div>{# /.dropdown #}
                     </td>
+                    {% endif %}
+
+
 
                     </tr>
                     {% else %}

@@ -1,361 +1,60 @@
 # =============================================================================
-#  role_dashboard.py  —  Role-aware dashboard + Supervisor stats + Admin view
+#  role_dashboard.py  —  Dynamic Dashboard Routing
 #  Project : أكاديمية شيفرة  (Shyfra Academy)
-#
-#  CHANGES IN THIS VERSION
-#  ───────────────────────
-#  • _supervisor_dashboard() now passes total_groups, total_students,
-#    total_certificates to the template (via shared helper)
-#  • New route: GET /admin/supervisor/<sup_id>  (Admin only)
-#      Deep-dive performance page for a single supervisor
-#
-#  Routes
-#  ──────
-#  GET  /                               → dashboard()
-#  GET  /dashboard                      → dashboard()
-#  POST /issue_certificate/<m>/<g>      → issue_certificate()
-#  GET  /admin/supervisor/<sup_id>      → admin_supervisor_stats()  ← NEW
 # =============================================================================
 
-import uuid
+from flask import render_template, flash, redirect, url_for  # تمت إضافة النواقص هنا
+from flask_login import login_required, current_user
 from datetime import date, timedelta
-from functools import wraps
-
-from flask import abort, flash, redirect, render_template, url_for
-from flask_login import current_user, login_required
-from sqlalchemy import and_, func
+from sqlalchemy import func
 
 from models import (
-    Certificate,
+    db,
+    User,
     Group,
     GroupMember,
-    PaymentReceipt,
-    PaymentTypeEnum,
-    RoleEnum,
     Subscription,
     SubscriptionPlan,
     SubscriptionStatusEnum,
-    User,
-    db,
+    PaymentReceipt,
+    PaymentTypeEnum,
+    Certificate,
+    RoleEnum  # تمت إضافة هذه
 )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Role guards
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _supervisor_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or (
-            not current_user.is_supervisor and not current_user.is_admin
-        ):
-            flash("هذه العملية مخصصة للمدربين فقط.", "danger")
-            return redirect(url_for("dashboard"))
-        return f(*args, **kwargs)
-    return decorated
+# تأكد من جلب صلاحية المدير إذا كانت في ملف آخر، أو تأكد من وجودها
+from groups_routes import admin_required as _admin_required 
 
 
-def _admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or not current_user.is_admin:
-            flash("هذه الصفحة مخصصة للمسؤول فقط.", "danger")
-            return redirect(url_for("dashboard"))
-        return f(*args, **kwargs)
-    return decorated
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Shared supervisor stats helper
-#  Called by both _supervisor_dashboard() and admin_supervisor_stats() so
-#  the calculation logic lives in exactly ONE place.
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _compute_supervisor_stats(supervisor_id: int) -> dict:
+def _register_role_dashboard_routes(app):
     """
-    Compute all performance statistics for a supervisor by user_id.
-
-    Returns a dict with keys
-    ────────────────────────
-    total_groups        int   — groups where supervisor_id == arg
-    total_students      int   — UNIQUE members enrolled across those groups
-    total_certificates  int   — certificates issued_by == arg
-    my_groups           list[Group]
-    my_students         list[dict]
-        keys: member, group, gm, sub (active Subscription|None), has_cert (bool)
+    Register the main dashboard routes and delegate to the appropriate
+    helper function based on the user's role.
     """
-
-    # ── 1. Groups ─────────────────────────────────────────────────────────
-    my_groups: list[Group] = (
-        Group.query
-        .filter_by(supervisor_id=supervisor_id)
-        .order_by(Group.created_at.desc())
-        .all()
-    )
-    total_groups: int = len(my_groups)
-
-    # Early return: no groups → all other stats are zero
-    if not my_groups:
-        return {
-            "total_groups"       : 0,
-            "total_students"     : 0,
-            "total_certificates" : 0,
-            "my_groups"          : [],
-            "my_students"        : [],
-        }
-
-    my_group_ids: list[int] = [g.group_id for g in my_groups]
-
-    # ── 2. Unique students across all supervised groups ────────────────────
-    #  COUNT(DISTINCT member_id) avoids double-counting a student who is
-    #  enrolled in more than one of this supervisor's groups.
-    total_students: int = (
-        db.session.query(func.count(func.distinct(GroupMember.member_id)))
-        .filter(GroupMember.group_id.in_(my_group_ids))
-        .scalar() or 0
-    )
-
-    # ── 3. Certificates issued BY this supervisor (not just in their groups) ──
-    #  This counts every cert the supervisor has ever signed, including for
-    #  groups that may have been reassigned later.
-    total_certificates: int = (
-        Certificate.query
-        .filter_by(issued_by=supervisor_id)
-        .count()
-    )
-
-    # ── 4. Enriched student list (one row per member × group pair) ─────────
-    rows = (
-        db.session.query(
-            User,
-            Group,
-            GroupMember,
-            Subscription,   # may be None → outerjoin
-        )
-        .join(GroupMember, User.user_id   == GroupMember.member_id)
-        .join(Group,       Group.group_id == GroupMember.group_id)
-        .outerjoin(
-            Subscription,
-            and_(
-                Subscription.member_id == User.user_id,
-                Subscription.status    == SubscriptionStatusEnum.Active,
-            ),
-        )
-        .filter(GroupMember.group_id.in_(my_group_ids))
-        .order_by(Group.group_id.asc(), User.fname.asc())
-        .all()
-    )
-
-    # Pre-build a set of (member_id, group_id) tuples for O(1) cert lookup
-    issued_cert_pairs: set[tuple[int, int]] = {
-        (c.member_id, c.group_id)
-        for c in Certificate.query
-        .filter(Certificate.group_id.in_(my_group_ids))
-        .all()
-    }
-
-    # Deduplicate: a student can appear multiple times if they have more than
-    # one active subscription (edge case); we keep only the first hit per pair.
-    my_students: list[dict] = []
-    seen: set[tuple[int, int]] = set()
-
-    for member, group, gm, sub in rows:
-        key = (member.user_id, group.group_id)
-        if key in seen:
-            continue
-        seen.add(key)
-        my_students.append({
-            "member"   : member,
-            "group"    : group,
-            "gm"       : gm,
-            "sub"      : sub,                      # None if no active sub
-            "has_cert" : key in issued_cert_pairs,  # disables issue button
-        })
-
-    return {
-        "total_groups"       : total_groups,
-        "total_students"     : total_students,
-        "total_certificates" : total_certificates,
-        "my_groups"          : my_groups,
-        "my_students"        : my_students,
-    }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Registration function — called from create_app()
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _register_role_dashboard_routes(app) -> None:
-
-    # =========================================================================
-    #  GET /  and  GET /dashboard
-    # =========================================================================
-
-    @app.route("/")
-    @app.route("/dashboard")
+    @app.route('/')
+    @app.route('/dashboard')
     @login_required
     def dashboard():
-        if current_user.role == RoleEnum.Admin:
+        if current_user.role.value == 'Admin':
             return _admin_dashboard()
-        elif current_user.role == RoleEnum.Supervisor:
+        elif current_user.role.value == 'Supervisor':
             return _supervisor_dashboard()
-        else:
+        elif current_user.role.value == 'Member':
             return _member_dashboard()
+        else:
+            return "Role not recognized", 403
+
 
     # =========================================================================
-    #  POST /issue_certificate/<member_id>/<group_id>
-    # =========================================================================
-
-    @app.route(
-        "/issue_certificate/<int:member_id>/<int:group_id>",
-        methods=["POST"],
-    )
-    @login_required
-    @_supervisor_required
-    def issue_certificate_dashboard(member_id: int, group_id: int):
-
-        member: User | None = db.session.get(User, member_id)
-        if member is None or not member.is_member:
-            flash("الطالب غير موجود أو غير صالح.", "danger")
-            return redirect(url_for("dashboard"))
-
-        group: Group | None = db.session.get(Group, group_id)
-        if group is None:
-            flash("المجموعة غير موجودة.", "danger")
-            return redirect(url_for("dashboard"))
-
-        if current_user.is_supervisor and group.supervisor_id != current_user.user_id:
-            flash("لا يمكنك إصدار شهادات لمجموعة لا تشرف عليها.", "danger")
-            return redirect(url_for("dashboard"))
-
-        enrolled = GroupMember.query.filter_by(
-            group_id=group_id, member_id=member_id
-        ).first()
-        if enrolled is None:
-            flash(
-                f"الطالب {member.full_name} غير مسجَّل في "
-                f"مجموعة '{group.group_name}'.", "warning",
-            )
-            return redirect(url_for("dashboard"))
-
-        existing = Certificate.query.filter_by(
-            member_id=member_id, group_id=group_id
-        ).first()
-        if existing is not None:
-            flash(
-                f"الطالب {member.full_name} يمتلك شهادةً بالفعل "
-                f"لمجموعة '{group.group_name}' "
-                f"(رمز: {existing.certificate_code}).", "warning",
-            )
-            return redirect(url_for("dashboard"))
-
-        today        = date.today()
-        random_token = uuid.uuid4().hex[:6].upper()
-        cert_code    = (
-            f"CERT-{today.year}"
-            f"-{group_id:03d}"
-            f"-{member_id:04d}"
-            f"-{random_token}"
-        )
-
-        new_cert = Certificate(
-            member_id        = member_id,
-            group_id         = group_id,
-            issued_by        = current_user.user_id,
-            issue_date       = today,
-            certificate_code = cert_code,
-        )
-
-        try:
-            db.session.add(new_cert)
-            db.session.commit()
-            flash(
-                f"✅ تم إصدار شهادة للطالب {member.full_name} "
-                f"في مجموعة '{group.group_name}'. "
-                f"رمز الشهادة: {cert_code}", "success",
-            )
-        except Exception as exc:
-            db.session.rollback()
-            app.logger.error(
-                f"issue_certificate error — member={member_id}, group={group_id}: {exc}"
-            )
-            flash("حدث خطأ أثناء إصدار الشهادة. يرجى المحاولة مجدداً.", "danger")
-
-        return redirect(url_for("dashboard"))
-
-    # =========================================================================
-    #  GET /admin/supervisor/<sup_id>   ← NEW
-    #
-    #  Admin-only deep-dive into a single supervisor's performance.
-    #  Uses the same _compute_supervisor_stats() helper as the dashboard so
-    #  numbers are always consistent.
-    #
-    #  Guard checks (in order)
-    #  ───────────────────────
-    #  1. Caller must be Admin  (@_admin_required)
-    #  2. Target user must exist
-    #  3. Target user must have role == Supervisor
-    #     (prevents viewing member/admin stats via URL manipulation)
-    #
-    #  Template variables
-    #  ──────────────────
-    #  supervisor          User
-    #  total_groups        int
-    #  total_students      int
-    #  total_certificates  int
-    #  my_groups           list[Group]
-    #  my_students         list[dict]   (same structure as dashboard)
-    # =========================================================================
-
-    @app.route("/admin/supervisor/<int:sup_id>", methods=["GET"])
-    @login_required
-    @_admin_required
-    def admin_supervisor_stats(sup_id: int):
-        """
-        Admin-only: render a detailed performance report for one supervisor.
-        """
-
-        # ── Fetch the supervisor user ──────────────────────────────────────
-        supervisor: User | None = db.session.get(User, sup_id)
-
-        if supervisor is None:
-            flash(f"المستخدم رقم {sup_id} غير موجود.", "danger")
-            return redirect(url_for("users"))
-
-        if supervisor.role != RoleEnum.Supervisor:
-            flash(
-                f"المستخدم '{supervisor.full_name}' ليس مدرباً — "
-                f"دوره: {supervisor.role.value}.", "warning",
-            )
-            return redirect(url_for("users"))
-
-        # ── Compute stats ──────────────────────────────────────────────────
-        stats = _compute_supervisor_stats(supervisor_id=sup_id)
-
-        return render_template(
-        "supervisor_stats.html",
-        supervisor         = supervisor,
-        total_groups       = stats["total_groups"],
-        total_students     = stats["total_students"],
-        total_certificates = stats["total_certificates"],
-        sup_groups         = stats["my_groups"],     # <--- قم بتغيير my_groups إلى sup_groups
-        sup_students       = stats["my_students"],   # <--- قم بتغيير my_students إلى sup_students
-    )
-
-# =========================================================================
     #  GET /admin/member/<member_id>   ← إحصائيات المتدرب
+    #  يجب أن يكون هذا المسار هنا بالداخل!
     # =========================================================================
-
     @app.route("/admin/member/<int:member_id>", methods=["GET"])
     @login_required
     @_admin_required
     def admin_member_stats(member_id: int):
-        """
-        Admin-only: render a detailed performance report for one student/member.
-        """
         # 1. جلب بيانات الطالب
-        member: User | None = db.session.get(User, member_id)
+        member = db.session.get(User, member_id)
 
         if member is None:
             flash(f"المستخدم رقم {member_id} غير موجود.", "danger")
@@ -369,8 +68,6 @@ def _register_role_dashboard_routes(app) -> None:
             return redirect(url_for("users"))
 
         # 2. جلب المجموعات التي ينتمي إليها الطالب
-        from models import GroupMember, Group, Subscription, SubscriptionPlan, Certificate
-        
         enrolled_groups = (
             db.session.query(Group, GroupMember)
             .join(GroupMember, Group.group_id == GroupMember.group_id)
@@ -391,7 +88,6 @@ def _register_role_dashboard_routes(app) -> None:
         # 4. جلب الشهادات
         certificates = Certificate.query.filter_by(member_id=member_id).all()
         
-        # تحويل الشهادات إلى قاموس (Dictionary) لتسهيل البحث عنها برقم المجموعة في الـ HTML
         cert_dict = {cert.group_id: cert for cert in certificates}
 
         return render_template(
@@ -405,35 +101,105 @@ def _register_role_dashboard_routes(app) -> None:
             cert_dict=cert_dict,
             today=date.today()
         )
-# ─────────────────────────────────────────────────────────────────────────────
-#  Private dashboard builders
-# ─────────────────────────────────────────────────────────────────────────────
 
+    # =========================================================================
+    #  GET /admin/supervisor/<sup_id>   ← إحصائيات المدرب
+    # =========================================================================
+    @app.route("/admin/supervisor/<int:sup_id>", methods=["GET"])
+    @login_required
+    @_admin_required
+    def admin_supervisor_stats(sup_id: int):
+        # 1. جلب بيانات المدرب
+        supervisor = db.session.get(User, sup_id)
+
+        if supervisor is None:
+            flash(f"المستخدم رقم {sup_id} غير موجود.", "danger")
+            return redirect(url_for("users"))
+
+        if supervisor.role != RoleEnum.Supervisor:
+            flash(
+                f"المستخدم '{supervisor.full_name}' ليس مدرباً — "
+                f"دوره: {supervisor.role.value}.", "warning",
+            )
+            return redirect(url_for("users"))
+
+        # 2. جلب مجموعات المدرب
+        sup_groups = Group.query.filter_by(supervisor_id=sup_id).all()
+        total_groups = len(sup_groups)
+
+        # 3. جلب طلاب المدرب
+        sup_students_raw = (
+            db.session.query(GroupMember, User, Group)
+            .join(User, GroupMember.member_id == User.user_id)
+            .join(Group, GroupMember.group_id == Group.group_id)
+            .filter(Group.supervisor_id == sup_id)
+            .order_by(Group.group_id, User.fname)
+            .all()
+        )
+
+        total_students = len(sup_students_raw)
+        total_certificates = Certificate.query.filter_by(issued_by=sup_id).count()
+
+        # Build student records with sub & cert context
+        sup_students = []
+        for gm, member, group in sup_students_raw:
+            # Latest subscription
+            sub = (
+                Subscription.query.filter_by(member_id=member.user_id)
+                .order_by(Subscription.end_date.desc())
+                .first()
+            )
+            # Cert status for this specific group
+            has_cert = (
+                Certificate.query.filter_by(
+                    member_id=member.user_id,
+                    group_id=group.group_id
+                ).first() is not None
+            )
+
+            sup_students.append({
+                'member':   member,
+                'group':    group,
+                'gm':       gm,
+                'sub':      sub,
+                'has_cert': has_cert
+            })
+
+        return render_template(
+            "supervisor_stats.html",
+            supervisor        = supervisor,
+            total_groups      = total_groups,
+            total_students    = total_students,
+            total_certificates = total_certificates,
+            sup_groups        = sup_groups,
+            sup_students      = sup_students,
+            today             = date.today()
+        )
+
+# ══════════════════════════════════════════════════════════════════════════
+#  1. ADMIN DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════
 def _admin_dashboard():
-    today             = date.today()
-    month_start       = today.replace(day=1)
+    today = date.today()
+    month_start = today.replace(day=1)
     EXPIRY_ALERT_DAYS = 15
 
-    active_monthly: int = (
-        db.session.query(func.count(Subscription.subscription_id))
+    # ── Dynamic active-subscriptions breakdown by plan name ───────────
+    plan_stats: list[tuple[str, int]] = (
+        db.session.query(
+            SubscriptionPlan.plan_name,
+            func.count(Subscription.subscription_id).label("cnt"),
+        )
         .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
-        .filter(
-            Subscription.status == SubscriptionStatusEnum.Active,
-            SubscriptionPlan.duration_months == 1,
-        ).scalar() or 0
+        .filter(Subscription.status == SubscriptionStatusEnum.Active)
+        .group_by(SubscriptionPlan.plan_name)
+        .order_by(func.count(Subscription.subscription_id).desc())
+        .all()
     )
 
-    active_yearly: int = (
-        db.session.query(func.count(Subscription.subscription_id))
-        .join(SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.plan_id)
-        .filter(
-            Subscription.status == SubscriptionStatusEnum.Active,
-            SubscriptionPlan.duration_months == 12,
-        ).scalar() or 0
-    )
+    total_active: int = sum(count for _, count in plan_stats)
 
-    total_active    = active_monthly + active_yearly
-
+    # ── Other aggregate stats ─────────────────────────────
     total_expired: int = (
         db.session.query(func.count(Subscription.subscription_id))
         .filter(Subscription.status == SubscriptionStatusEnum.Expired)
@@ -458,22 +224,29 @@ def _admin_dashboard():
             PaymentReceipt.payment_type == PaymentTypeEnum.Renewal,
             PaymentReceipt.payment_date >= month_start,
             PaymentReceipt.payment_date <= today,
-        ).scalar() or 0
+        )
+        .scalar() or 0
     )
 
     revenue_this_month: float = float(
-        db.session.query(func.coalesce(func.sum(PaymentReceipt.amount_paid), 0))
+        db.session.query(
+            func.coalesce(func.sum(PaymentReceipt.amount_paid), 0)
+        )
         .filter(
             PaymentReceipt.payment_date >= month_start,
             PaymentReceipt.payment_date <= today,
-        ).scalar() or 0.0
+        )
+        .scalar() or 0.0
     )
 
+    # ── Expiring-soon renewal alerts ──────────────────────────────────
     alert_threshold = today + timedelta(days=EXPIRY_ALERT_DAYS)
     expiring_soon = (
         db.session.query(
             Subscription,
-            User.fname, User.lname, User.email,
+            User.fname,
+            User.lname,
+            User.email,
             SubscriptionPlan.plan_name,
         )
         .join(User,             Subscription.member_id == User.user_id)
@@ -489,8 +262,7 @@ def _admin_dashboard():
 
     return render_template(
         "dashboard.html",
-        active_monthly      = active_monthly,
-        active_yearly       = active_yearly,
+        plan_stats          = plan_stats,
         total_active        = total_active,
         total_expired       = total_expired,
         total_suspended     = total_suspended,
@@ -504,71 +276,85 @@ def _admin_dashboard():
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════
+#  2. SUPERVISOR DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════
 def _supervisor_dashboard():
-    """
-    Supervisor's own dashboard.
+    user_id = current_user.user_id
+    today = date.today()
 
-    Delegates entirely to _compute_supervisor_stats() so the numbers shown
-    here are always identical to what the Admin sees on /admin/supervisor/<id>.
-    """
+    # Get Supervisor's Groups
+    my_groups = Group.query.filter_by(supervisor_id=user_id).all()
+    total_groups = len(my_groups)
 
-    stats = _compute_supervisor_stats(supervisor_id=current_user.user_id)
-
-    return render_template(
-        "dashboard.html",
-        # ── NEW: performance counters for the stat-card row ──────────────
-        total_groups        = stats["total_groups"],
-        total_students      = stats["total_students"],
-        total_certificates  = stats["total_certificates"],
-        # ── Existing: lists for the table / group cards ──────────────────
-        my_groups           = stats["my_groups"],
-        my_students         = stats["my_students"],
-    )
-
-
-def _member_dashboard():
-    member_id: int = current_user.user_id
-    today: date    = date.today()
-
-    member_subscription: Subscription | None = (
-        Subscription.query
-        .filter_by(member_id=member_id, status=SubscriptionStatusEnum.Active)
-        .order_by(Subscription.start_date.desc())
-        .first()
-    )
-    if member_subscription is None:
-        member_subscription = (
-            Subscription.query
-            .filter_by(member_id=member_id)
-            .order_by(Subscription.start_date.desc())
-            .first()
-        )
-
-    member_groups: list[Group] = (
-        Group.query
-        .join(GroupMember, Group.group_id == GroupMember.group_id)
-        .filter(GroupMember.member_id == member_id)
-        .order_by(Group.created_at.desc())
+    # Get Students in Supervisor's Groups
+    my_students_raw = (
+        db.session.query(GroupMember, User, Group)
+        .join(User, GroupMember.member_id == User.user_id)
+        .join(Group, GroupMember.group_id == Group.group_id)
+        .filter(Group.supervisor_id == user_id)
+        .order_by(Group.group_id, User.fname)
         .all()
     )
 
-    member_receipts_count: int = (
-        db.session.query(func.count(PaymentReceipt.receipt_id))
-        .join(Subscription,
-              PaymentReceipt.subscription_id == Subscription.subscription_id)
-        .filter(Subscription.member_id == member_id)
-        .scalar() or 0
-    )
+    total_students = len(my_students_raw)
+    total_certificates = Certificate.query.filter_by(issued_by=user_id).count()
 
-    member_certs_count: int = (
-        Certificate.query.filter_by(member_id=member_id).count()
-    )
+    # Build the students list with subscription and certificate status
+    my_students = []
+    for gm, member, group in my_students_raw:
+        # Get latest subscription
+        sub = Subscription.query.filter_by(member_id=member.user_id).order_by(Subscription.end_date.desc()).first()
+        # Check if cert is issued for this specific group
+        has_cert = Certificate.query.filter_by(member_id=member.user_id, group_id=group.group_id).first() is not None
+        
+        my_students.append({
+            'member': member,
+            'group': group,
+            'gm': gm,
+            'sub': sub,
+            'has_cert': has_cert
+        })
 
     return render_template(
         "dashboard.html",
-        member_subscription   = member_subscription,
-        member_groups         = member_groups,
-        member_receipts_count = member_receipts_count,
-        member_certs_count    = member_certs_count,
-        today                 = today,
+        total_groups=total_groups,
+        total_students=total_students,
+        total_certificates=total_certificates,
+        my_groups=my_groups,
+        my_students=my_students,
+        today=today
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  3. MEMBER DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════
+def _member_dashboard():
+    user_id = current_user.user_id
+    today = date.today()
+
+    # Latest subscription
+    member_subscription = Subscription.query.filter_by(member_id=user_id).order_by(Subscription.end_date.desc()).first()
+
+    # Enrolled groups
+    member_groups = (
+        db.session.query(Group)
+        .join(GroupMember, Group.group_id == GroupMember.group_id)
+        .filter(GroupMember.member_id == user_id)
+        .all()
+    )
+
+    # Quick stats
+    member_receipts_count = PaymentReceipt.query.join(Subscription).filter(Subscription.member_id == user_id).count()
+    member_certs_count = Certificate.query.filter_by(member_id=user_id).count()
+
+    return render_template(
+        "dashboard.html",
+        member_subscription=member_subscription,
+        member_groups=member_groups,
+        member_receipts_count=member_receipts_count,
+        member_certs_count=member_certs_count,
+        today=today
+    )
+    
